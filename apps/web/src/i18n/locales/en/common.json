@@ -1,0 +1,51 @@
+{
+  "appName": "AI Trading Coach",
+  "tagline": "Signals, with the reasoning attached",
+  "nav": {
+    "home": "Home",
+    "signal": "Signals",
+    "markets": "Markets",
+    "setups": "Setups",
+    "news": "News",
+    "positions": "Positions",
+    "journal": "Journal",
+    "coach": "Coach",
+    "training": "Training",
+    "guide": "Guide",
+    "settings": "Settings"
+  },
+  "dataQuality": {
+    "label": "Data quality",
+    "LIVE": "Live",
+    "DELAYED": "Delayed",
+    "DEMO": "Demo",
+    "provider": "Provider",
+    "candles": "Candles",
+    "lastUpdate": "Last update",
+    "demoWarning": "This is DEMO data. The prices are synthetic — use it to see how the engine reasons, never to trade these levels."
+  },
+  "actions": {
+    "refresh": "Refresh",
+    "back": "Back",
+    "viewDetail": "View detail",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "close": "Close",
+    "send": "Send",
+    "copy": "Copy",
+    "retry": "Retry"
+  },
+  "state": {
+    "loading": "Loading...",
+    "empty": "Nothing here yet",
+    "error": "Something went wrong"
+  },
+  "language": {
+    "label": "Language",
+    "th": "ไทย",
+    "en": "English"
+  },
+  "disclaimer": "This is an educational and analytical tool, not financial advice. You make the final decision on every trade.",
+  "disclaimerShort": "Educational tool, not financial advice"
+}

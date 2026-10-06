@@ -1,0 +1,30 @@
+{
+  "name": "ai-trading-coach",
+  "private": true,
+  "packageManager": "pnpm@11.1.2",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @atc/web dev",
+    "build": "pnpm --filter @atc/web build",
+    "start": "pnpm --filter @atc/web start",
+    "lint": "pnpm --filter @atc/web lint",
+    "typecheck": "tsc -p tsconfig.check.json --noEmit && pnpm typecheck:web",
+    "typecheck:web": "pnpm --filter @atc/web exec tsc -p tsconfig.json --noEmit",
+    "test": "tsx packages/engine/src/engine.test.ts && tsx packages/engine/src/scoring.test.ts && tsx packages/ai/src/schema.test.ts && tsx packages/market-data/src/mock.test.ts && tsx packages/news/src/news.test.ts && tsx apps/web/src/app/theme.test.ts",
+    "verify": "pnpm typecheck && pnpm test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "sharp",
+      "@tailwindcss/oxide"
+    ]
+  }
+}

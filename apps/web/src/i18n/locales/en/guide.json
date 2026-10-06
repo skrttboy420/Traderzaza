@@ -1,0 +1,82 @@
+{
+  "title": "How to use this",
+  "subtitle": "What each screen is for, and what the numbers on it actually mean",
+  "intro": "Read this once. It is short, and it will stop you from reading a score as a signal — which is the single most expensive mistake you can make with a tool like this.",
+  "start": {
+    "title": "What this is, and what it is not",
+    "body": "Everything on the screen is either a calculation or a label on a calculation — including the signal itself. It means the conditions met the criteria, not that this is financial advice.",
+    "item1": "It gives you a signal: direction, entry, stop and targets. It reads market structure, supply and demand zones, the multi-timeframe picture and your risk, and shows you in full where that signal came from.",
+    "item2": "What it will not do is place the order for you, and it has no idea what price will do next. Nothing does. A signal means the conditions lined up, not that the trade will win.",
+    "item3": "Every number — structure, zones, scores, stops, targets, R:R, position size — is computed in code. The AI only puts the calculation into words and coaches you about your own behaviour.",
+    "item4": "It decides the signal. It does not decide about your money — it has no idea how much loss you can live with. You place the trade, always. Open the FACT / INTERPRETATION / ASSUMPTION blocks to see where the facts end and the opinion starts."
+  },
+  "flow": {
+    "title": "A session, start to finish",
+    "body": "Six steps. Do them in this order and the app does what it was built for.",
+    "item1": "Home — glance at the ranked setups and at any news warning strips. If a high-impact release is minutes away, stop here and come back after it.",
+    "item2": "Markets — see the whole watchlist: price, higher-timeframe bias, best setup state, and the data quality for each one.",
+    "item3": "Setups → pick one — read the plan: entry zone, stop, targets, R:R, and the quality score with its breakdown.",
+    "item4": "Read WHY ENTER, WHY WAIT and INVALIDATION. If WHY WAIT convinces you more than WHY ENTER does, you have your answer — that is the screen working, not failing.",
+    "item5": "Risk calculator — enter your account size and risk percent. It gives you the lot size that makes your stop cost exactly what you said you would risk.",
+    "item6": "Took the trade? Log it on Positions while the reasoning is fresh. Closed it? Review it in Journal. The coach has nothing to coach you on until you do this."
+  },
+  "score": {
+    "title": "Setup Quality Score is not a win rate",
+    "body": "This is the part most people get wrong, so it is worth being blunt about it.",
+    "item1": "The score (0–100) measures how well this setup matches the rules this app was built around — confluence, structure, location, risk-reward. That is all it measures.",
+    "item2": "It is NOT a probability of winning. An 85 can lose and a 55 can win. A high score means \"this is the kind of setup I was taught to look for\", not \"this will work\".",
+    "item3": "AI Confidence is a separate number, shown separately on purpose. It says how sure the language model is about its own explanation — not about the trade.",
+    "item4": "Use the score to filter and to compare setups against each other, never to size up. Position size comes from the risk calculator and nothing else."
+  },
+  "data": {
+    "title": "Is the chart delayed?",
+    "body": "Depends on the market, and the app always tells you which case you are in. Look at the badge on every chart.",
+    "item1": "LIVE — crypto (BTCUSDT, ETHUSDT) from Binance's public feed, no API key needed. This is real-time.",
+    "item2": "DELAYED — gold and forex on a free Twelve Data key. Usable for structure and planning, but the last price can be behind your broker. Check your levels in your platform before you execute.",
+    "item3": "DEMO — synthetic data. The structure and zones are real calculations, but the prices are generated. This is what you see with no API key configured, and the badge is impossible to miss. Never trade a DEMO level.",
+    "item4": "Zones and structure barely move on a few seconds of delay, so planning on delayed data is fine. Execution is not — that is what your broker's chart is for."
+  },
+  "risk": {
+    "title": "Risk, position size and the stop",
+    "item1": "Set your account size, your risk per trade and your daily loss limit in Settings once. Everything else is derived from them.",
+    "item2": "Position size is calculated from the distance to your stop, not from how good the setup looks. A tighter stop means a bigger position for the same money at risk — and the same loss if you are wrong.",
+    "item3": "The stop goes where the idea is proven wrong, which is usually beyond the zone plus an ATR buffer so normal noise cannot reach it. Moving a stop closer to \"risk less\" does not risk less, it just loses more often.",
+    "item4": "If you hit your daily loss limit, the app says so and stops suggesting you look for more. That number exists to protect you from the hour after a bad trade."
+  },
+  "news": {
+    "title": "Using the economic calendar",
+    "body": "The News screen answers two separate questions, and keeps them separate.",
+    "item1": "WHAT IS COMING — the schedule, with the source's own impact rating (1–3 stars), the forecast, the previous print, and whether the number beat or missed once it is out.",
+    "item2": "SHOULD I WAIT — a blackout from 30 minutes before a high-impact release until 15 minutes after. That is a reason to wait, never a direction.",
+    "item3": "WHAT HAPPENED LAST TIME — tap \"see past reactions\" and the app measures what this market actually did in the 30 minutes after each past release, split by whether the number beat or missed its forecast.",
+    "item4": "That measurement is history, not a forecast. When there are too few measurable releases, it says so rather than averaging two data points into a conclusion. \"Mixed\" is also a real answer: it means the release moves this market without telling you which way."
+  },
+  "positions": {
+    "title": "Positions is a manual tracker",
+    "item1": "It is not connected to a broker and it never sends an order. Nothing you do on that screen touches real money.",
+    "item2": "You open a position in your broker's platform, then record it here so the app can track it against live price and grade the outcome in R.",
+    "item3": "\"Prefill from the current plan\" copies the engine's entry, stop and first target into the form so you are not typing numbers twice."
+  },
+  "journal": {
+    "title": "Journal and the coach",
+    "item1": "After a trade closes, log how it went and — more importantly — whether you followed your plan. A winning trade taken against your plan is still a mistake.",
+    "item2": "The coach reads your logged trades, not your intentions. With fewer than about ten entries it will tell you it does not have enough to say anything useful.",
+    "item3": "The patterns it looks for are behavioural: revenge trading, oversizing after a loss, cutting winners early, entering before confirmation."
+  },
+  "training": {
+    "title": "Replay training",
+    "item1": "Price is revealed one candle at a time. You mark the structure, call your bias, and place an entry, stop and target before the next candle appears.",
+    "item2": "Every practice trade is kept with the price you entered at, where your stop and target were, where the market actually went, and the result in R. Not just \"right\" or \"wrong\".",
+    "item3": "Replay sessions are seeded, so you can replay the same sequence and compare how you read it the second time."
+  },
+  "limits": {
+    "title": "What it cannot do",
+    "body": "Stated plainly, because a tool that hides its limits is dangerous.",
+    "item1": "It cannot predict price. No score, no AI paragraph and no news study on this site is a forecast.",
+    "item2": "It cannot execute. There is no broker connection anywhere in the app, by design.",
+    "item3": "It only reads scheduled news. A surprise headline, a central banker going off script or a geopolitical shock will not be in any calendar.",
+    "item4": "It analyses the six markets in the watchlist on the mandatory 4H → 1H → 15M → 5M chain. Other symbols and timeframes are not supported.",
+    "item5": "Data quality is whatever your configured provider gives. If it says DELAYED or DEMO, believe it."
+  },
+  "closing": "Trading is a game of managing being wrong. This app exists to make you wrong more cheaply and more consciously — not to make you right."
+}

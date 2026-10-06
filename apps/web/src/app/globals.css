@@ -1,0 +1,249 @@
+@import "tailwindcss";
+
+/*
+ * Dark trading-terminal theme (§78). Colours carry meaning but never alone —
+ * every state also has a text label and an icon/shape (§79).
+ *
+ * Every colour in the app goes through a token here — there is not one
+ * hardcoded palette utility in any component. That is what makes a second
+ * theme a palette swap rather than a rewrite, so keep it that way: if you
+ * need a new shade, add a token, do not inline a hex.
+ *
+ * The dark values are the defaults. The light overrides live further down in
+ * `[data-theme="light"]`, and the two must stay in lockstep: a token that
+ * exists in only one theme is a bug that shows up as an invisible element.
+ */
+@theme {
+  --color-bg: #0a0d12;
+  --color-surface: #111620;
+  --color-surface-2: #171d2a;
+  --color-surface-3: #1f2736;
+  --color-border: #242e40;
+  --color-border-strong: #33405a;
+
+  --color-text: #e8edf5;
+  --color-muted: #94a3b8;
+  /* Lifted from the original #64748b, which measured 3.15:1 on surface-3 —
+     fine on a desk, not fine on a phone outdoors. These three now clear
+     4.5:1 against every surface they are drawn on; theme.test.ts proves it. */
+  --color-faint: #818ea1;
+
+  --color-long: #26a371;
+  /* A dimmer long, for the B grade and a once-tested zone: present but not
+     shouting. Tokenised rather than inlined precisely because it has to
+     invert — a pale mint is unreadable on white. */
+  --color-long-dim: #7dd3a0;
+  --color-long-soft: #0f2a20;
+  --color-short: #e96266;
+  --color-short-soft: #2d1416;
+  --color-wait: #e8b931;
+  --color-wait-soft: #2b2310;
+  --color-limit: #498bf7;
+  --color-limit-soft: #11223d;
+  /* Never used as text — only borders, score bars and status dots — so this
+     one is held to the 3:1 graphical-object bar rather than 4.5:1. */
+  --color-neutral: #657185;
+  --color-neutral-soft: #1a212d;
+
+  /*
+   * Chart palette. lightweight-charts paints a canvas, so it cannot inherit a
+   * CSS variable the way the DOM does — PriceChart reads these with
+   * getComputedStyle on mount and on theme change. They live here anyway so
+   * there is exactly one place where the canvas and the DOM can be kept in
+   * agreement, which was the whole point of the old CHART_COLORS object.
+   */
+  --chart-bg: #0a0d12;
+  --chart-grid: #1a2130;
+  --chart-text: #818ea1;
+  --chart-up: #26a371;
+  --chart-down: #e5484d;
+  --chart-demand: rgba(38, 163, 113, 0.14);
+  --chart-demand-line: rgba(38, 163, 113, 0.55);
+  --chart-supply: rgba(229, 72, 77, 0.14);
+  --chart-supply-line: rgba(229, 72, 77, 0.55);
+  --chart-entry: #3b82f6;
+  --chart-stop: #e5484d;
+  --chart-target: #26a371;
+  --chart-invalid: #515f75;
+  --chart-swing: #94a3b8;
+
+  --font-sans: "Inter", "IBM Plex Sans Thai", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+
+/*
+ * Light theme (§5 of the Phase 5 brief: a light mode you can actually read,
+ * charts included).
+ *
+ * This is not the dark palette lightened. Two things had to change in kind:
+ *
+ * 1. The surfaces invert their stacking. In the dark theme a raised surface is
+ *    lighter than the page; on white there is nowhere lighter to go, so the
+ *    page becomes a soft grey and cards become white — raised is *brighter*
+ *    in both, which keeps every existing `surface-2`/`surface-3` usage
+ *    reading as "nested" without touching a component.
+ *
+ * 2. The semantic hues get darker, not lighter. #e8b931 is a perfectly good
+ *    amber on near-black and about 1.8:1 on white, which is the "can't read
+ *    anything" failure. Each one is retuned to clear 4.5:1 against the
+ *    surface it is actually drawn on, while staying recognisably the same
+ *    colour so the green/red/amber/blue vocabulary survives the switch.
+ *
+ * `html[...]` rather than `[data-theme="light"]` on purpose: Tailwind emits
+ * the @theme block at `:root`, which has the same specificity as a bare
+ * attribute selector, and relying on source order through a build step is
+ * how a theme silently stops applying.
+ */
+html[data-theme="light"] {
+  --color-bg: #eef1f6;
+  --color-surface: #ffffff;
+  --color-surface-2: #f6f8fb;
+  --color-surface-3: #e9eef5;
+  --color-border: #d8e0ea;
+  --color-border-strong: #b2bfd0;
+
+  --color-text: #0f1724;
+  --color-muted: #4a5668;
+  /* 4.5:1 against --color-bg, not against white. `faint` is the token most
+     often used for small text sitting directly on the page rather than in a
+     card, so the page is the background it has to survive. */
+  --color-faint: #5f6b80;
+
+  --color-long: #0b7a4b;
+  /* On white, "dimmer" cannot mean lighter — a pale mint is the exact failure
+     this theme exists to avoid. It reads as the quieter green by being less
+     saturated than --color-long, not by being weaker. */
+  --color-long-dim: #137b52;
+  --color-long-soft: #e3f5ec;
+  --color-short: #c4161c;
+  --color-short-soft: #fdeaea;
+  --color-wait: #8a6200;
+  --color-wait-soft: #fbf1d6;
+  --color-limit: #1b55c4;
+  --color-limit-soft: #e6eefc;
+  --color-neutral: #5c6880;
+  --color-neutral-soft: #eceff5;
+
+  /* The candle bodies are fills, not text, so they can stay a touch brighter
+     than the text tokens above and still read clearly on white. */
+  --chart-bg: #ffffff;
+  --chart-grid: #e7edf4;
+  --chart-text: #68748a;
+  --chart-up: #0f9a60;
+  --chart-down: #d8343a;
+  --chart-demand: rgba(15, 154, 96, 0.1);
+  --chart-demand-line: rgba(15, 154, 96, 0.6);
+  --chart-supply: rgba(216, 52, 58, 0.1);
+  --chart-supply-line: rgba(216, 52, 58, 0.6);
+  --chart-entry: #1b55c4;
+  --chart-stop: #d8343a;
+  --chart-target: #0f9a60;
+  /* An invalidated level is meant to recede, but §57 keeps it on the chart so
+     the trader can study what went wrong — so it still has to clear the 3:1
+     floor for a graphical object. Muted, not ghosted. */
+  --chart-invalid: #8a95a8;
+  --chart-swing: #5c6880;
+
+  color-scheme: light;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+* {
+  border-color: var(--color-border);
+}
+
+html,
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  /* Mobile-first: leave room for the fixed bottom nav. */
+  padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
+  overscroll-behavior-y: none;
+}
+
+@media (min-width: 1024px) {
+  body {
+    padding-bottom: 0;
+  }
+}
+
+/* Numbers in a trading UI must be monospaced so columns line up. */
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 0.875rem;
+}
+
+.card-inset {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: 0.75rem;
+}
+
+/* Minimum 44px touch targets (§60: no tiny buttons). */
+.tap {
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+}
+
+.scroll-x {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.scroll-x::-webkit-scrollbar {
+  display: none;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-surface-3);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-border-strong);
+}
+
+/* Focus must stay visible: this app is used fast, often one-handed. */
+:focus-visible {
+  outline: 2px solid var(--color-limit);
+  outline-offset: 2px;
+}
+
+@keyframes atc-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.live-dot {
+  animation: atc-pulse 2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-dot {
+    animation: none;
+  }
+}

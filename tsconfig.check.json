@@ -1,0 +1,24 @@
+// Packages only. `apps/web` has its own tsconfig (it needs the Next plugin and
+// JSX settings), so it is checked separately by `pnpm typecheck:web` — both run
+// under `pnpm typecheck`. Leaving the web app out of the gate entirely is how a
+// whole screen of untranslated engine output shipped unnoticed.
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "paths": {
+      "@atc/types": ["./packages/types/src/index.ts"],
+      "@atc/engine": ["./packages/engine/src/index.ts"],
+      "@atc/market-data": ["./packages/market-data/src/index.ts"],
+      "@atc/ai": ["./packages/ai/src/index.ts"],
+      "@atc/news": ["./packages/news/src/index.ts"]
+    }
+  },
+  "include": [
+    "packages/types/src/**/*.ts",
+    "packages/engine/src/**/*.ts",
+    "packages/market-data/src/**/*.ts",
+    "packages/ai/src/**/*.ts",
+    "packages/news/src/**/*.ts"
+  ]
+}

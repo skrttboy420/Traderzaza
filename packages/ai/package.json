@@ -1,0 +1,18 @@
+{
+  "name": "@atc/ai",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@atc/engine": "workspace:*",
+    "@atc/types": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@atc/market-data": "workspace:*"
+  }
+}

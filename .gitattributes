@@ -1,0 +1,15 @@
+# Normalise everything to LF in the repository.
+#
+# Development happens on Windows but the build runs on Vercel's Linux
+# containers, and without this every file would land in the repo with CRLF.
+# That is not cosmetic: it makes a one-character edit show as a whole-file
+# diff, and it breaks shell scripts the moment one is added.
+#
+# `text=auto` lets git decide what is text, convert it to LF on commit, and
+# hand it back in the platform's own flavour on checkout. Nothing about the
+# Windows working copy changes.
+* text=auto
+
+# Lockfiles are tooling-owned and enormous; never let a diff tool try to be
+# clever about them in a review.
+pnpm-lock.yaml -diff linguist-generated=true

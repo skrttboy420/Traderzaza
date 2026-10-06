@@ -1,0 +1,19 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "preserve",
+    "allowJs": true,
+    "incremental": true,
+    "plugins": [{ "name": "next" }],
+    "paths": {
+      "@/*": ["./src/*"],
+      "@atc/types": ["../../packages/types/src/index.ts"],
+      "@atc/engine": ["../../packages/engine/src/index.ts"],
+      "@atc/market-data": ["../../packages/market-data/src/index.ts"],
+      "@atc/ai": ["../../packages/ai/src/index.ts"],
+      "@atc/news": ["../../packages/news/src/index.ts"]
+    }
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
+}

@@ -1,0 +1,102 @@
+{
+  "title": "Settings",
+  "account": {
+    "title": "Account and risk",
+    "balance": "Account balance",
+    "currency": "Currency",
+    "riskPercent": "Risk per trade (%)",
+    "riskPercentHint": "1-2% per trade is the usual ceiling.",
+    "riskWarning": "Risk per trade is above 2%. A short losing streak would hurt the account badly.",
+    "smallAccount": "Small Account Mode",
+    "smallAccountHint": "With a small account the system reduces size and only surfaces higher-grade setups.",
+    "maxTradesPerDay": "Max trades per day",
+    "maxOpenPositions": "Max concurrent positions"
+  },
+  "watchlist": {
+    "title": "Watchlist",
+    "subtitle": "Only markets on this list are scanned.",
+    "add": "Add market",
+    "remove": "Remove",
+    "empty": "No markets on the list yet"
+  },
+  "timeframes": {
+    "title": "Timeframes",
+    "entryTimeframe": "Entry timeframe",
+    "chainLocked": "The 4H → 1H → 15M → 5M chain is mandatory and cannot be changed.",
+    "chainWhy": "So a 5M chart is never read in isolation from the bigger picture."
+  },
+  "data": {
+    "title": "Market data",
+    "subtitle": "The system always states what kind of data it is using.",
+    "activeProvider": "Active provider",
+    "perSymbol": "Status per market",
+    "forceDemo": "Force demo data",
+    "forceDemoHint": "Use this to explore the system without hitting real APIs.",
+    "refreshInterval": "Refresh interval (seconds)",
+    "noKeyNotice": "No market data API key configured. Markets without a direct feed use demo data and are clearly labelled DEMO."
+  },
+  "ai": {
+    "title": "AI assistant",
+    "provider": "Model",
+    "noKeyNotice": "No ANTHROPIC_API_KEY configured, so explanations are generated directly from the engine. Every number is still correct — the wording is just stiffer.",
+    "mode": "Answer mode",
+    "level": "Explanation level",
+    "language": "AI reply language",
+    "languageHint": "The AI replies in whichever language the app is set to."
+  },
+  "alerts": {
+    "title": "Alerts",
+    "subtitle": "Only fires when something actually changed. No spam.",
+    "newSetup": "New setup",
+    "entryValid": "Entry became valid",
+    "approaching": "Price approaching zone",
+    "invalidated": "Setup invalidated",
+    "qualityJump": "Large quality change",
+    "minGrade": "Only alert from grade",
+    "quiet": "Quiet hours"
+  },
+  "appearance": {
+    "label": "Theme",
+    "hint": "Leave it on \"System\" and it follows your device's light/dark setting.",
+    "system": "System",
+    "light": "Light",
+    "dark": "Dark"
+  },
+  "display": {
+    "title": "Display",
+    "theme": "Theme",
+    "language": "Language",
+    "chartLayers": "Chart layers on by default",
+    "numberFormat": "Number format",
+    "showConfidence": "Show AI confidence",
+    "showConfidenceHint": "Turn this off if you would rather that number not influence your decisions."
+  },
+  "storage": {
+    "title": "Your data",
+    "mode": "Storage mode",
+    "localOnly": "This device only",
+    "supabase": "Database (Supabase)",
+    "clear": "Clear local data",
+    "clearConfirm": "This deletes the settings, journal entries and positions stored in this browser. It cannot be undone."
+  },
+  "about": {
+    "title": "About",
+    "version": "Version",
+    "whatThisIs": "What this is",
+    "whatThisIsBody": "It scans for setups and gives you a signal — direction, entry, stop and targets — then shows you every input behind the call.",
+    "whatThisIsNot": "What this is not",
+    "whatThisIsNotBody": "Not an automated trading system, it never places an order for you, and it is not financial advice. A signal means the conditions met the criteria, not that the trade will work. You place the trade.",
+    "limitations": "Known limitations",
+    "howItWorks": "All the maths is computed in code, not by a language model. The language model only explains and teaches.",
+    "limits": {
+      "data": "Metals and FX fall back to DEMO data unless a market-data API key is configured. Crypto streams live from Binance without a key.",
+      "llm": "Without ANTHROPIC_API_KEY the explanations come straight from the engine: drier wording, identical numbers.",
+      "storage": "No database is connected, so the journal and settings live in this browser only.",
+      "news": "No news feed is wired up. The system will say it has no news data rather than invent any.",
+      "realtime": "Data is polled, not streamed over WebSocket, so prices can lag your broker slightly.",
+      "backtest": "Replay training uses whatever real history the provider returns. It is not yet a backtester that persists results."
+    }
+  },
+  "saved": "Saved",
+  "resetDefaults": "Reset to defaults"
+}

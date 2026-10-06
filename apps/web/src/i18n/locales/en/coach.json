@@ -1,0 +1,105 @@
+{
+  "title": "Trading coach",
+  "subtitle": "Ask anything about the chart in front of you. The coach answers from facts the engine already calculated.",
+  "mode": {
+    "label": "Answer mode",
+    "coach": "Coach mode",
+    "coachHint": "Asks you questions first, so you do the thinking.",
+    "direct": "Direct mode",
+    "directHint": "Gives the answer straight, no questions back."
+  },
+  "level": {
+    "label": "Explanation level",
+    "beginner": "Beginner",
+    "intermediate": "Intermediate",
+    "advanced": "Advanced"
+  },
+  "chat": {
+    "placeholder": "Ask about this setup...",
+    "empty": "No conversation yet. Start with one of the questions below.",
+    "thinking": "Reading the chart...",
+    "contextLabel": "Currently discussing",
+    "noContext": "No market selected. Pick one so the coach reads a real chart.",
+    "sourceLlm": "Answered by the language model, using engine numbers.",
+    "sourceDeterministic": "Answered directly from the engine (no language model key configured)."
+  },
+  "suggest": {
+    "label": "Common questions",
+    "why": "What is this market doing right now?",
+    "wait": "Why should I not enter yet?",
+    "stop": "Why does the stop belong there?",
+    "invalid": "What would invalidate this setup?",
+    "mtf": "Do the higher and lower timeframes conflict?"
+  },
+  "teach": {
+    "title": "Teach me this setup",
+    "subtitle": "Uses the chart in front of you as the example, not abstract theory.",
+    "whatToSee": "What to look at on this chart",
+    "howToFind": "How to find this setup yourself",
+    "commonMistake": "Common mistakes with this setup",
+    "practice": "Practice task"
+  },
+  "whatIf": {
+    "title": "What if?",
+    "subtitle": "Pose a scenario and see whether the read changes.",
+    "placeholder": "e.g. what if price breaks below the zone and reclaims it on the next candle?",
+    "run": "Run it",
+    "result": "What would happen",
+    "changes": "What changes",
+    "unchanged": "What stays the same",
+    "note": "This is a simulation, not a prediction."
+  },
+  "grade": {
+    "title": "Grade my analysis",
+    "subtitle": "Write your own read of this chart, then compare it with what the engine sees.",
+    "placeholder": "I see an uptrend pulling back into demand, waiting for a confirmation candle before entry...",
+    "submit": "Submit for review",
+    "whatYouGot": "What you read correctly",
+    "whatYouMissed": "What you missed",
+    "verdict": "Verdict"
+  },
+  "glossary": {
+    "title": "Glossary",
+    "subtitle": "Technical terms stay in English, with a plain explanation attached.",
+    "search": "Search terms",
+    "empty": "No matching term."
+  },
+  "memory": {
+    "title": "What the coach remembers about you",
+    "subtitle": "Built only from your own journal. Nothing is assumed.",
+    "empty": "Not enough data yet. Log a few more trades and patterns will start to show.",
+    "evidence": "Evidence",
+    "basedOnTrades": "Based on {{count}} trades"
+  },
+  "psychology": {
+    "title": "Psychology coach",
+    "subtitle": "Based on recorded behaviour, not personality judgements.",
+    "patterns": "Detected patterns",
+    "noPatterns": "No patterns with clear evidence yet, which is a good sign.",
+    "weekly": "Weekly report",
+    "strengths": "Done well",
+    "watchOut": "Watch out for",
+    "focus": "Focus for next week",
+    "tag": {
+      "fomo": "FOMO",
+      "revenge": "Revenge trade",
+      "overconfidence": "Overconfidence",
+      "early_entry": "Entered too early",
+      "late_entry": "Entered too late",
+      "oversizing": "Oversized position",
+      "moved_stop": "Moved the stop",
+      "early_breakeven": "Break-even too early",
+      "emotional_reentry": "Emotional re-entry",
+      "over_analysis": "Over-analysis, no entry",
+      "refused_valid_setup": "Refused a valid setup"
+    }
+  },
+  "aiPerf": {
+    "title": "AI performance",
+    "subtitle": "Transparency on how well the analysis has held up, broken down by setup grade.",
+    "byGrade": "By grade",
+    "calibration": "Grade vs outcome calibration",
+    "samples": "Samples",
+    "notEnough": "Too few samples to conclude anything."
+  }
+}

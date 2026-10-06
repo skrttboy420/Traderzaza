@@ -1,0 +1,267 @@
+{
+  "dashboard": {
+    "title": "Best opportunities right now",
+    "subtitle": "Every market on your watchlist has been scanned. Ordered by readiness and setup quality — never by AI confidence.",
+    "noOpportunities": "Nothing qualifies right now. Standing aside is a decision.",
+    "scanning": "Scanning markets...",
+    "summary": "Scanner summary",
+    "rank": "Rank"
+  },
+  "scannerState": {
+    "ENTRY_NOW": "Entry now",
+    "WAIT_CONFIRMATION": "Wait for confirmation",
+    "LIMIT_ZONE": "Limit at zone",
+    "WATCHLIST": "Watchlist",
+    "NO_TRADE": "No trade"
+  },
+  "setupStatus": {
+    "WATCHING": "Watching",
+    "ZONE_APPROACHING": "Zone approaching",
+    "IN_ZONE": "In zone",
+    "WAITING_CONFIRMATION": "Waiting for confirmation",
+    "ENTRY_VALID": "Entry valid",
+    "ACTIVE": "Active trade",
+    "MANAGING": "Managing",
+    "COMPLETED": "Completed",
+    "INVALIDATED": "Entry invalidated"
+  },
+  "direction": {
+    "long": "Long",
+    "short": "Short",
+    "none": "No direction"
+  },
+  "trend": {
+    "strong_bullish": "Strong bullish",
+    "bullish": "Bullish",
+    "weak_bullish": "Weak bullish",
+    "ranging": "Ranging",
+    "transition": "Transition",
+    "weak_bearish": "Weak bearish",
+    "bearish": "Bearish",
+    "strong_bearish": "Strong bearish"
+  },
+  "phase": {
+    "continuation": "Continuation",
+    "weakening": "Weakening",
+    "reversal_risk": "Reversal risk",
+    "consolidation": "Consolidation",
+    "expansion": "Expansion",
+    "compression": "Compression"
+  },
+  "regime": {
+    "label": "Market regime",
+    "trending_up": "Trending up",
+    "trending_down": "Trending down",
+    "ranging": "Ranging",
+    "expansion": "Expansion",
+    "compression": "Compression",
+    "high_volatility": "High volatility",
+    "low_volatility": "Low volatility"
+  },
+  "quality": {
+    "label": "Setup Quality",
+    "grade": "Grade",
+    "notProbability": "This is a setup quality grade, not a win probability.",
+    "breakdown": "Score breakdown",
+    "weight": "Weight",
+    "component": "Component"
+  },
+  "confidence": {
+    "label": "AI confidence",
+    "hint": "Separate from Setup Quality. This is how sure the analysis layer is about its own read, based on data quality and timeframe agreement."
+  },
+  "zone": {
+    "label": "Supply / Demand zone",
+    "demand": "Demand zone",
+    "supply": "Supply zone",
+    "range": "Zone range",
+    "freshness": "Freshness",
+    "tests": "Tests",
+    "reaction": "Reaction strength",
+    "impact": "Structural impact",
+    "htfAligned": "HTF aligned",
+    "displacement": "Departure displacement (ATR)",
+    "distance": "Distance to zone (ATR)",
+    "fresh": "Fresh, never tested",
+    "tested_once": "Tested once",
+    "tested_twice": "Tested twice",
+    "tested_multiple": "Tested several times",
+    "weak": "Weak",
+    "invalid": "Invalid"
+  },
+  "mtf": {
+    "label": "Multi-timeframe",
+    "chain": "Mandatory chain: 4H → 1H → 15M → 5M",
+    "agreement": "Agreement",
+    "conflict": "Timeframe conflict",
+    "noConflict": "No timeframe conflict"
+  },
+  "pullback": {
+    "label": "Pullback or reversal",
+    "pullback": "Pullback",
+    "reversal": "Reversal",
+    "unclear": "Unclear",
+    "strength": "Classifier strength"
+  },
+  "plan": {
+    "label": "Entry plans",
+    "Conservative": "Conservative",
+    "Balanced": "Balanced",
+    "Aggressive": "Aggressive",
+    "No Trade": "No Trade",
+    "entryType": "Entry type",
+    "entryZone": "Entry zone",
+    "bestPrice": "Best price",
+    "bestPriceHint": "Better fill, higher chance price never reaches it.",
+    "saferPrice": "Safer price",
+    "saferPriceHint": "Worse fill, less guesswork because confirmation is already visible.",
+    "stopLoss": "Stop loss",
+    "takeProfit": "Take profit",
+    "riskReward": "R:R",
+    "size": "Size",
+    "sizeFull": "Full risk unit",
+    "sizeProbe": "Probe — not the full position",
+    "notes": "Notes"
+  },
+  "entryType": {
+    "aggressive": "Aggressive limit at zone edge",
+    "confirmation": "Confirmation entry",
+    "retest": "Retest entry",
+    "probe": "Probe entry"
+  },
+  "explain": {
+    "whyEnter": "Why enter",
+    "whyWait": "Why wait",
+    "confirmation": "What must happen first",
+    "invalidation": "What invalidates this setup",
+    "facts": "Facts from the chart",
+    "factsHint": "Every number here was calculated from candles in code, not written by a language model.",
+    "interpretation": "Interpretation",
+    "interpretationHint": "This is a reading of the facts. It can be wrong.",
+    "assumptions": "Assumptions",
+    "assumptionsHint": "What must stay true for the read to hold.",
+    "teachMe": "Teach me this setup",
+    "whatIf": "What if?",
+    "whatIfPlaceholder": "e.g. what if price sweeps below the zone and reclaims it quickly?"
+  },
+  "chart": {
+    "layers": "Chart layers",
+    "swings": "Swings (HH/HL/LH/LL)",
+    "structure": "Structure events (BOS/CHoCH/MSS)",
+    "zones": "Supply / Demand zones",
+    "entries": "Entry / SL / TP",
+    "timeframe": "Timeframe"
+  },
+  "markets": {
+    "title": "Watchlist",
+    "price": "Price",
+    "bias": "HTF bias",
+    "best": "Best setup"
+  },
+  "setups": {
+    "title": "All setups",
+    "subtitle": "Grouped by scanner state",
+    "invalidatedKept": "Invalidated setups are kept, never deleted, so you can review what the read got wrong."
+  },
+  "noTrade": {
+    "title": "No tradable setup",
+    "reasons": "Reasons"
+  },
+  "signal": {
+    "title": "Signals",
+    "subtitle": "Only the markets actually calling a trade, with the entry, stop, targets and the reasoning behind them",
+    "count": "{{count}} signals",
+    "viewFull": "Full detail",
+    "tierHint": {
+      "ENTRY_NOW": "Conditions are met. Entry is valid now, per the plan.",
+      "WAIT_CONFIRMATION": "Price has reached the zone. The trigger listed on the detail page is still outstanding.",
+      "LIMIT_ZONE": "Price has not reached the zone yet. A resting order at the zone is the play."
+    },
+    "none": {
+      "title": "No signal right now",
+      "body": "Nothing is broken — this is the system working. A market whose conditions are not met is held back rather than promoted into a signal. On a session where the timeframes disagree across the board, no signal is the correct answer.",
+      "blockedTitle": "What each market is stuck on",
+      "quality": "Quality"
+    },
+    "refresh": "Rescan",
+    "scanning": "Scanning..."
+  },
+  "replay": {
+    "title": "Market replay training",
+    "subtitle": "Reveal the chart one candle at a time, decide before you can see the future, then check the result.",
+    "market": "Market",
+    "driver": "Stepping timeframe",
+    "load": "Load a replay",
+    "reload": "Load another",
+    "loading": "Loading candles...",
+    "play": "Auto play",
+    "pause": "Pause",
+    "next": "Next candle",
+    "forward": "Skip 10 candles",
+    "reset": "Restart",
+    "clock": "Replay clock",
+    "position": "Candle",
+    "end": "End of the data set. Restart to practise again.",
+    "noFuture": "Every timeframe is truncated to the replay clock, so the engine only reads candles that have already closed. No future data leaks in.",
+    "engineRead": "What the engine reads right now",
+    "yourCall": "What do you think happens next?",
+    "callHint": "Choose before revealing the next candle. The result is checked against what actually happened over the following 10 candles.",
+    "callNoTrade": "Stand aside",
+    "score": "Practice record",
+    "calls": "Calls made",
+    "correct": "Correct",
+    "pending": "Awaiting result",
+    "waitingResult": "Call recorded. Reveal 10 more candles to see the result.",
+    "lastResult": "Last result",
+    "resultCorrect": "Correct call",
+    "resultWrong": "Wrong call",
+    "resultFlat": "Price barely moved, scored as a draw.",
+    "practiceHint": "The goal is not a high hit rate. It is making your reasoning at decision time match what the chart was actually showing.",
+    "log": {
+      "title": "Every practice trade",
+      "subtitle": "Each call you made, with the entry price, the exit price and the real result.",
+      "empty": "No calls yet. Make one to start the log.",
+      "entry": "Entry",
+      "stop": "Stop loss",
+      "target": "Take profit",
+      "exit": "Exit",
+      "move": "Price travelled",
+      "held": "Held for",
+      "bars": "candles",
+      "atCandle": "candle",
+      "mfe": "Best excursion",
+      "mae": "Worst excursion",
+      "open": "Still open",
+      "result": "Result",
+      "hitTarget": "Target hit",
+      "hitStop": "Stopped out",
+      "windowClose": "Measurement window closed, exited at market",
+      "ambiguous": "One candle touched both the stop and the target. Candle data does not say which came first, so this is scored as a stop — the outcome against us. We do not guess in our own favour.",
+      "noEnginePlan": "The engine had no plan at that moment, so a 1.5xATR stop and a 2R target were used to make the call measurable.",
+      "engineAtCall": "What the engine saw when you called it",
+      "stayedOut": "Stood aside",
+      "stayedOutGood": "Standing aside was right: price barely moved.",
+      "stayedOutMissed": "Price did travel, so this one was missed (which is still fine if your reasoning was sound).",
+      "priceRose": "Price rose",
+      "priceFell": "Price fell",
+      "reviewHint": "Review what you were thinking and what the chart then did. That is the part that builds skill — not the hit rate."
+    },
+    "summary": {
+      "title": "This session",
+      "calls": "Calls made",
+      "resolved": "Resolved",
+      "pending": "Awaiting result",
+      "wins": "Winners",
+      "losses": "Losers",
+      "totalR": "Total R",
+      "avgR": "Average per trade",
+      "bestR": "Best trade",
+      "worstR": "Worst trade",
+      "hitRate": "Target hit rate",
+      "notEnough": "Too few trades for these numbers to say anything about skill. The per-trade reasoning is the useful part.",
+      "reset": "Clear practice log"
+    },
+    "callRecorded": "Call recorded. Keep stepping the chart; it settles when the stop or the target is reached.",
+    "window": "Measured within"
+  }
+}
