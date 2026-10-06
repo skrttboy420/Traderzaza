@@ -5,6 +5,7 @@ import { smallAccountSizeFraction } from "@atc/engine";
 import { ASSETS, getAsset } from "@atc/market-data";
 import { MTF_CHAIN, TIMEFRAMES, type DataQuality, type Timeframe } from "@atc/types";
 
+import { AccountPanel } from "@/components/AccountPanel";
 import { LocaleSwitch } from "@/components/LocaleSwitch";
 import { ThemeSwitch } from "@/components/ThemeSwitch";
 import { TopBar } from "@/components/TopBar";
@@ -106,6 +107,9 @@ export default function SettingsPage() {
       <TopBar title={t("title")} />
 
       <main className="space-y-4 p-4">
+        {/* ---------- account: who you are, and sign out (§77) ---------- */}
+        <AccountPanel />
+
         {/* ---------- language (§61-62) ---------- */}
         <section className="card p-4">
           <SectionTitle title={t("display.language")} />

@@ -72,7 +72,7 @@ Add these under **Project → Settings → Environment Variables**, scope
 | `ANTHROPIC_API_KEY` | AI-written explanations and coaching | the deterministic `LocalExplainer` writes them; every **number** is identical |
 | `ANTHROPIC_MODEL` | pinning a specific model | app default |
 | `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY` | settings / journal / positions / rules persisted per user | everything is stored in the browser's `localStorage` on that one device |
-| `SUPABASE_SERVICE_ROLE_KEY` | server-side writes that bypass RLS | not used by any request path a user can trigger |
+| `SUPABASE_SERVICE_ROLE_KEY` | creating accounts (`/api/auth/signup`), server-side writes that bypass RLS | sign-up only works if "Confirm email" is disabled on the project — see §4 |
 | `ENABLE_NEWS` | News screen, home risk strips, setup news block | defaults to `true`, needs no key |
 | `ENABLE_INVESTING_CALENDAR` | optional third calendar source | defaults to `false` — **leave it off on Vercel**, see below |
 | `NEWS_TTL_SECONDS` | calendar cache | defaults to `900` |
@@ -123,13 +123,39 @@ says so.
 To enable persistence:
 
 1. Create a project at <https://supabase.com>.
-2. Run `supabase/migrations/0001_init.sql` — either `supabase db push`, or
-   paste it into the project's SQL editor.
+2. Run the files in `supabase/migrations/` **in numeric order** — either
+   `supabase db push`, or paste each one into the project's SQL editor.
+   `0001_init.sql` is the schema; `0002_auth_profile.sql` adds the trigger that
+   gives every new account its profile, settings and default watchlist.
 3. Copy the project URL, the anon key and the service-role key into the Vercel
    environment variables above.
 4. Redeploy (environment changes do not apply to an existing build).
 
 Every table in the migration has RLS enabled with `auth.uid()` policies.
+
+### Accounts are username-only
+
+Sign-up asks for a username and a password, nothing else — no email, no
+verification step. Supabase Auth has no username credential, so each account
+gets a synthetic address, `<username>@traderzaza.invalid`, derived from the
+username by a pure function in `apps/web/src/lib/supabase.ts`.
+
+Two consequences worth knowing before you deploy:
+
+- **`SUPABASE_SERVICE_ROLE_KEY` is effectively required.** A `.invalid` address
+  can never receive mail, so if the project has **Confirm email** switched on,
+  an ordinary browser sign-up creates an account that can never be confirmed —
+  and it burns the project's email quota (two per hour on the built-in SMTP)
+  sending a message nobody will read. `/api/auth/signup` uses the service-role
+  key to create the account already confirmed and sends nothing. The only
+  alternative is to turn **Confirm email** off under Authentication → Sign In /
+  Providers → Email, in which case browser sign-up works unaided.
+- **The domain is the credential.** Changing `USERNAME_EMAIL_DOMAIN` after
+  accounts exist orphans every one of them: the rows stay in `auth.users`, but
+  no login form can ever produce their address again.
+
+Signing in is optional — no screen is account-gated, and the analysis is
+identical either way.
 
 ---
 

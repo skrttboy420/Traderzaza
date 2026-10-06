@@ -3,6 +3,7 @@
 import Link from "next/link";
 
 import { useT } from "@/i18n/provider";
+import { AccountChip } from "./AccountChip";
 import { LocaleSwitch } from "./LocaleSwitch";
 import { ThemeSwitch } from "./ThemeSwitch";
 
@@ -27,6 +28,7 @@ export function TopBar({ title, subtitle }: { title?: string; subtitle?: string 
         <div className="flex shrink-0 items-center gap-1.5">
           <ThemeSwitch compact />
           <LocaleSwitch compact />
+          <AccountChip />
         </div>
       </div>
     </header>

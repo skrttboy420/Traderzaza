@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { useT } from "@/i18n/provider";
+import { AccountChip } from "./AccountChip";
 import { cx } from "./ui";
 
 /**
@@ -110,6 +111,13 @@ export function SideNav() {
             );
           })}
         </ul>
+
+        {/* Account sits below the destinations, separated by a rule: it is a
+            state indicator that happens to be clickable, not another screen in
+            the same list. Renders nothing when accounts are unconfigured. */}
+        <div className="mt-2 border-t border-[var(--color-border)] pt-2">
+          <AccountChip variant="row" />
+        </div>
       </div>
     </nav>
   );

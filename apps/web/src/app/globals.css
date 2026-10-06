@@ -194,6 +194,45 @@ body {
   border-radius: 0.75rem;
 }
 
+/*
+ * Text fields.
+ *
+ * This class was already being used by the journal form but had never been
+ * defined, so every one of those fields was rendering with Tailwind's preflight
+ * reset: no border, no background, no padding. On a dark page that is an
+ * invisible input — you could type in it, but only if you already knew it was
+ * there.
+ *
+ * `font: inherit` matters as much as the colours: without it a mobile browser
+ * picks its own (smaller) default size for form controls, and iOS Safari zooms
+ * the whole page in whenever you focus anything under 16px.
+ */
+.input {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0 0.75rem;
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--color-text);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: 0.625rem;
+}
+.input::placeholder {
+  color: var(--color-faint);
+}
+.input:focus {
+  border-color: var(--color-border-strong);
+}
+.input:disabled {
+  color: var(--color-faint);
+  cursor: not-allowed;
+}
+textarea.input {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
 /* Minimum 44px touch targets (§60: no tiny buttons). */
 .tap {
   min-height: 2.75rem;

@@ -7,6 +7,7 @@ import enJournal from "./locales/en/journal.json";
 import enSettings from "./locales/en/settings.json";
 import enNews from "./locales/en/news.json";
 import enGuide from "./locales/en/guide.json";
+import enAuth from "./locales/en/auth.json";
 import thCommon from "./locales/th/common.json";
 import thTrading from "./locales/th/trading.json";
 import thCoach from "./locales/th/coach.json";
@@ -14,6 +15,7 @@ import thJournal from "./locales/th/journal.json";
 import thSettings from "./locales/th/settings.json";
 import thNews from "./locales/th/news.json";
 import thGuide from "./locales/th/guide.json";
+import thAuth from "./locales/th/auth.json";
 
 export const NAMESPACES = [
   "common",
@@ -23,6 +25,7 @@ export const NAMESPACES = [
   "settings",
   "news",
   "guide",
+  "auth",
 ] as const;
 
 export type Namespace = (typeof NAMESPACES)[number];
@@ -41,6 +44,7 @@ export const DICTIONARIES: Record<Locale, Dictionary> = {
     settings: thSettings as DictionaryNode,
     news: thNews as DictionaryNode,
     guide: thGuide as DictionaryNode,
+    auth: thAuth as DictionaryNode,
   },
   en: {
     common: enCommon as DictionaryNode,
@@ -50,6 +54,7 @@ export const DICTIONARIES: Record<Locale, Dictionary> = {
     settings: enSettings as DictionaryNode,
     news: enNews as DictionaryNode,
     guide: enGuide as DictionaryNode,
+    auth: enAuth as DictionaryNode,
   },
 };
 
