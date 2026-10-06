@@ -106,7 +106,7 @@ export async function POST(request: Request) {
 
       const prompt =
         intent === "teach"
-          ? teachMePrompt(setup, locale, level)
+          ? teachMePrompt(setup, locale)
           : intent === "whatif"
             ? whatIfPrompt(setup, input, locale)
             : gradeAnalysisPrompt(setup, input, locale);
@@ -129,6 +129,10 @@ export async function POST(request: Request) {
       locale,
       level,
       mode,
+      // The intent travels with the request because it decides how long the
+      // answer may be and whether coach mode applies: a desk question wants
+      // four sentences, the Teach Me walkthrough wants all seven steps.
+      intent,
       setup,
       ...(Array.isArray(body.trades) ? { trades: body.trades.slice(0, 200) } : {}),
     });
@@ -136,6 +140,9 @@ export async function POST(request: Request) {
     return NextResponse.json({
       content: reply.content,
       source: reply.source,
+      // Present only when a key is configured and the call still failed, which
+      // is the one case the source badge alone cannot explain.
+      note: reply.note ?? null,
       provider: provider.name,
       intent,
       setupId: setup?.id ?? null,

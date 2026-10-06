@@ -192,6 +192,25 @@ export function clamp(value: number, min: number, max: number): number {
 
 export function round(value: number, minTick: number): number {
   if (minTick <= 0) return value;
-  const decimals = Math.max(0, Math.ceil(-Math.log10(minTick)));
-  return Number((Math.round(value / minTick) * minTick).toFixed(decimals));
+  return Number((Math.round(value / minTick) * minTick).toFixed(tickDecimals(minTick)));
+}
+
+/** How many decimals an instrument's tick size implies. */
+export function tickDecimals(minTick: number): number {
+  if (minTick <= 0) return 2;
+  return Math.max(0, Math.ceil(-Math.log10(minTick)));
+}
+
+/**
+ * A price as it should be *read*, at the instrument's own precision.
+ *
+ * `round` returns a number, which is right for arithmetic and wrong for prose:
+ * it drops the trailing zero a trader expects on a gold level, and the
+ * alternative the stop and break-even sentences used to reach for — a
+ * hardcoded five decimals — renders that same gold level as "2312.69788" and a
+ * BTC level as "67000.00000". A price inside a sentence has to be formatted at
+ * the asset's tick, not rounded and not padded to someone else's precision.
+ */
+export function priceText(value: number, minTick: number): string {
+  return round(value, minTick).toFixed(tickDecimals(minTick));
 }

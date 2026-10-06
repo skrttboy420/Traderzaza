@@ -12,6 +12,7 @@ import { generateCandles, requireAsset } from "@atc/market-data";
 import { AiAnalysisSchema, guardLanguage, parseAiAnalysis, reconcileWithEngine } from "./schema";
 import { LocalExplainer, buildLocalAnalysis } from "./local";
 import { analysisUserPrompt, chatSystemPrompt, teachMePrompt } from "./prompt";
+import type { ChatRequest } from "./provider";
 import { createAiProvider } from "./claude";
 
 let passed = 0;
@@ -258,10 +259,52 @@ test("the chat prompt forbids psychology claims when the journal is empty", () =
 });
 
 test("the teach-me prompt walks the trader's own 10-step process", () => {
-  const prompt = teachMePrompt(buildSetup(), "th", "beginner");
+  const prompt = teachMePrompt(buildSetup(), "th");
   for (const needle of ["higher timeframe", "zone", "pullback", "confirmation", "stop", "targets", "drop this idea"]) {
     assert.ok(prompt.includes(needle), `teach-me prompt must cover ${needle}`);
   }
+});
+
+test("a chat answer is given a length budget; a Teach Me walkthrough is not", () => {
+  // The request was short, spoken answers — and nothing in the prompt used to
+  // bound length at all, so a one-line question came back as an essay. The
+  // budget is the fix, but it must not reach Teach Me: the trader pressed a
+  // button for a seven-step lesson, and four sentences would be a different
+  // feature. One system prompt serves both, so the split is worth pinning.
+  const setup = buildSetup();
+  const base: ChatRequest = { messages: [], locale: "th", level: "beginner", mode: "coach", setup };
+
+  const chat = chatSystemPrompt({ ...base, intent: "chat" });
+  assert.ok(chat.includes("ANSWER LENGTH"), "chat must carry a length budget");
+  assert.ok(chat.includes("120 words"));
+  assert.ok(chat.includes("COACH MODE"), "coach mode applies to free conversation");
+
+  const teach = chatSystemPrompt({ ...base, intent: "teach" });
+  assert.ok(!teach.includes("120 words"), "the walkthrough must not be capped at a chat answer");
+  assert.ok(teach.includes("every step you were asked for"));
+  // Coach mode's "open with a question" fights a structured lesson: it would
+  // start by asking the trader to explain the thing they asked to be taught.
+  assert.ok(!teach.includes("COACH MODE"), "coach mode must not be stacked on a walkthrough");
+
+  // Omitting the intent must pick the strict budget, not the loose one.
+  assert.equal(chatSystemPrompt(base), chat);
+});
+
+test("the Thai register instruction is written in Thai and protects the English terms", () => {
+  // Told in English to "reply in conversational Thai", a model reliably
+  // produces translated-textbook Thai — including literal renderings of terms
+  // traders only ever say in English. The guard is that the instruction itself
+  // is Thai and names the specific words that must not be translated.
+  const setup = buildSetup();
+  const th = chatSystemPrompt({ messages: [], locale: "th", level: "beginner", mode: "direct", setup });
+  assert.ok(/[฀-๿]/.test(th), "the Thai register block must be written in Thai");
+  assert.ok(th.includes("อุปสงค์/อุปทาน"), "the mistranslation to avoid must be named explicitly");
+  for (const term of ["supply", "demand", "BOS", "CHoCH", "R:R", "ATR"]) {
+    assert.ok(th.includes(term), `${term} must be listed as untranslatable`);
+  }
+
+  const en = chatSystemPrompt({ messages: [], locale: "en", level: "beginner", mode: "direct", setup });
+  assert.ok(!/[฀-๿]/.test(en), "the English prompt must not carry Thai instructions");
 });
 
 test("no API key falls back to the deterministic explainer, not a fake LLM", () => {
@@ -297,7 +340,56 @@ async function run(): Promise<void> {
     assert.ok(answer.content.includes("ข้อเท็จจริง (FACT)"));
     assert.ok(answer.content.includes("การตีความ (INTERPRETATION)"));
     assert.ok(answer.content.includes("สมมติฐาน (ASSUMPTION)"));
-    assert.ok(answer.content.includes("ไม่ใช่คำแนะนำการลงทุน"), "the disclaimer must always be present");
+
+    // The call itself has to be the first line, not something you scroll to.
+    assert.ok(
+      answer.content.split("\n")[0]?.includes(setup.symbol),
+      "the answer must open with the call, not with a heading",
+    );
+
+    // No disclaimer in the body. Every screen that can render this already
+    // prints it once at the page level, and a copy under each answer is the
+    // padding the brevity rules exist to remove.
+    assert.ok(
+      !answer.content.includes("ไม่ใช่คำแนะนำการลงทุน"),
+      "the disclaimer belongs to the screen, not to every message",
+    );
+  });
+
+  await testAsync("the no-key answer stays short, and answers only what was asked", async () => {
+    // This path cannot summarise — there is no model — so its only lever is
+    // selection. Asking about the stop must not return the whole plan: that is
+    // how the answer ends up buried in its own supporting evidence.
+    const setup = buildSetup();
+    const provider = new LocalExplainer();
+    const ask = (content: string) =>
+      provider.chat({ messages: [{ role: "user", content }], locale: "th", level: "beginner", mode: "direct", setup });
+
+    const stop = (await ask("SL วางไว้ที่ไหน")).content;
+    assert.ok(stop.includes("SL"), "the question was about the stop");
+    assert.ok(!stop.includes("เข้าโซน"), "the entry zone was not asked about");
+
+    const everything = (await ask("สรุปให้ฟังหน่อย")).content;
+    assert.ok(everything.includes("เข้าโซน"), "naming nothing means give the whole plan");
+
+    // "ทำไมยังไม่ควรเข้าตอนนี้" contains "เข้า". Matching on keywords alone
+    // answered it with the entry zone — the single thing it did not ask for —
+    // so the negation has to beat the keyword.
+    const wait = (await ask("ทำไมยังไม่ควรเข้าตอนนี้")).content;
+    assert.ok(wait.includes("ทำไมยังไม่เข้า"), "a wait question wants the engine's reasons");
+    assert.ok(!wait.includes("เข้าโซน"), "a wait question must not be answered with the entry zone");
+
+    // ...but "ทำไม SL ต้องอยู่จุดนี้" is *also* a why question and does still
+    // want the level, so "why" alone must not suppress the plan.
+    const whyStop = (await ask("ทำไม SL ต้องอยู่จุดนี้")).content;
+    assert.ok(whyStop.includes("SL"), "a why question that names a level still prints it");
+
+    const invalid = (await ask("อะไรจะทำให้เซ็ตอัพนี้เสีย")).content;
+    assert.ok(invalid.includes("อะไรทำให้ไอเดียนี้เสีย"), "invalidation is its own question");
+
+    // A phone screen next to a chart. Twelve bullet lines is already a lot.
+    const bullets = everything.split("\n").filter((line) => line.startsWith("- "));
+    assert.ok(bullets.length <= 10, `answer carried ${bullets.length} bullet lines, expected <= 10`);
   });
 
   await testAsync("chat refuses to answer about a chart when none is loaded", async () => {

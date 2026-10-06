@@ -606,7 +606,7 @@ function buildStop(params: {
     }
   }
 
-  const suggestion = structuralStop(dir, level, atrValue, label);
+  const suggestion = structuralStop(dir, level, atrValue, label, tick);
   return { price: round(suggestion.price, tick), reason: suggestion.reason };
 }
 

@@ -17,6 +17,8 @@ interface Turn {
   content: string;
   /** "llm" when a language model wrote it, otherwise the deterministic engine. */
   source?: string;
+  /** Why the model did not answer, when a key was configured but the call failed. */
+  note?: string;
 }
 
 const LEVELS: ExplanationLevel[] = ["beginner", "intermediate", "advanced"];
@@ -83,12 +85,18 @@ export default function CoachPage() {
         const payload = (await response.json()) as {
           content?: string;
           source?: string;
+          note?: string | null;
           error?: string;
         };
         if (!response.ok || !payload.content) throw new Error(payload.error ?? "request failed");
         setTurns((prev) => [
           ...prev,
-          { role: "assistant", content: payload.content ?? "", source: payload.source ?? "deterministic" },
+          {
+            role: "assistant",
+            content: payload.content ?? "",
+            source: payload.source ?? "deterministic",
+            ...(payload.note ? { note: payload.note } : {}),
+          },
         ]);
         requestAnimationFrame(() => {
           const node = scrollRef.current;
@@ -244,6 +252,15 @@ export default function CoachPage() {
                       {turn.source === "llm" ? t("chat.sourceLlm") : t("chat.sourceDeterministic")}
                     </Badge>
                     <AiText text={turn.content} />
+                    {/* Only appears when a key is set and the call still
+                        failed — the one state the badge above cannot explain,
+                        and the state someone is in right after pasting a key
+                        that is mistyped or out of credit. */}
+                    {turn.note ? (
+                      <p className="mt-2 border-t border-[var(--color-border)] pt-2 text-[11px] leading-relaxed text-[var(--color-faint)]">
+                        {t("chat.fallbackReason")}: <span className="num">{turn.note}</span>
+                      </p>
+                    ) : null}
                   </div>
                 ),
               )

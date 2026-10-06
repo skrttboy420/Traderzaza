@@ -21,7 +21,8 @@
     "contextLabel": "Currently discussing",
     "noContext": "No market selected. Pick one so the coach reads a real chart.",
     "sourceLlm": "Answered by the language model, using engine numbers.",
-    "sourceDeterministic": "Answered directly from the engine (no language model key configured)."
+    "sourceDeterministic": "Answered directly from the engine (no language model key configured).",
+    "fallbackReason": "A key is configured, but the model call failed"
   },
   "suggest": {
     "label": "Common questions",

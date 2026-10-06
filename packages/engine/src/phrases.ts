@@ -100,9 +100,20 @@ export const PHRASES = {
   "label.entryType.retest": { en: "retest entry", th: "เข้าตอนราคากลับมารีเทสต์" },
   "label.entryType.probe": { en: "probe entry", th: "เข้าไม้เล็กทดลอง" },
 
+  /**
+   * All three must be NOUN PHRASES, because every slot they fill is a noun
+   * slot: "with {verdict} into a zone", "classified as {verdict}",
+   * "แล้วเกิด{verdict} กลับเข้ามาหา", "ถูกจัดเป็น{verdict}".
+   *
+   * `unclear` used to be the adjectival "ยังอ่านไม่ชัด" / bare "unclear", which
+   * reads fine on its own and breaks all four sentences the moment it is
+   * substituted: "แล้วเกิดยังอ่านไม่ชัด กลับเข้ามาหา..." and "with unclear
+   * into a 15m supply zone". One mismatched label, three broken sentences, in
+   * both languages — see the shape test in engine.test.ts.
+   */
   "label.verdict.pullback": { en: "a pullback", th: "การย่อ (Pullback)" },
   "label.verdict.reversal": { en: "a reversal", th: "การกลับตัว (Reversal)" },
-  "label.verdict.unclear": { en: "unclear", th: "ยังอ่านไม่ชัด" },
+  "label.verdict.unclear": { en: "an unclear move", th: "การเคลื่อนไหวที่อ่านไม่ชัด" },
 
   "label.zoneKind.demand": { en: "demand", th: "โซนอุปสงค์ (Demand)" },
   "label.zoneKind.supply": { en: "supply", th: "โซนอุปทาน (Supply)" },

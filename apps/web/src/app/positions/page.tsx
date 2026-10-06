@@ -256,6 +256,10 @@ export default function PositionsPage() {
                       currentPrice: live,
                       newProtectedLevel: quote.protectedLevel,
                       atrValue: quote.atr,
+                      // So the level quoted in the break-even sentence reads at
+                      // this instrument's precision, not at a fixed five
+                      // decimals that make a gold level look like FX.
+                      ...(asset ? { minTick: asset.minTick } : {}),
                     })
                   : null;
 

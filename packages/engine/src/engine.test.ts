@@ -1,13 +1,20 @@
 import assert from "node:assert/strict";
 import type { Candle } from "@atc/types";
 import { generateCandles, requireAsset } from "@atc/market-data";
-import { atrAt, candleMetrics } from "./indicators";
+import { atrAt, candleMetrics, priceText } from "./indicators";
 import { classifyTrend, detectStructureEvents, detectSwings, readStructure } from "./structure";
 import { detectZones, priceInZone, zoneDistanceAtr } from "./zones";
 import { analyze, isValidReEntry } from "./setups";
 import { ReplayController, resolvePracticeCall } from "./replay";
-import { breakEvenDecision, calculateRisk, excursion, resultR, summarizePerformance } from "./risk";
-import { PHRASES, renderPhrase } from "./phrases";
+import {
+  breakEvenDecision,
+  calculateRisk,
+  excursion,
+  resultR,
+  structuralStop,
+  summarizePerformance,
+} from "./risk";
+import { PHRASES, renderPhrase, trendPhrase, verdictPhrase } from "./phrases";
 
 /** Narrative assertions key off the phrase id, which is language-independent. */
 function hasKey(phrases: { key: string }[], key: string): boolean {
@@ -362,6 +369,57 @@ test("break-even requires 1R plus a new protected swing", () => {
   });
   assert.equal(valid.move, true);
   assert.ok((valid.price ?? 0) > 98, "the new stop must be tighter than the old one");
+});
+
+test("a label substituted into a noun slot is a noun phrase in both languages", () => {
+  // Three sentences substitute {verdict} into a noun slot — "with {verdict}
+  // into a zone", "แล้วเกิด{verdict} กลับเข้ามาหา", "ถูกจัดเป็น{verdict}" — and
+  // one of the three labels was an adjectival form. It read fine in isolation
+  // and broke every sentence it was substituted into, in both languages, which
+  // is precisely the failure a per-key translation test cannot see: nothing is
+  // missing, and the key renders. Only the grammatical *shape* is wrong.
+  for (const verdict of ["pullback", "reversal", "unclear"] as const) {
+    const th = renderPhrase(verdictPhrase(verdict), "th");
+    const en = renderPhrase(verdictPhrase(verdict), "en");
+    assert.ok(th.startsWith("การ"), `Thai verdict "${th}" must be a noun phrase (การ…)`);
+    assert.ok(/^(a|an|the) /.test(en), `English verdict "${en}" must carry an article`);
+  }
+
+  // And the rendered sentence must not read as a clause jammed into a noun gap.
+  const sentence = renderPhrase(
+    { key: "setup.read.shape", vars: { trend: trendPhrase("bearish"), verdict: verdictPhrase("unclear"), tf: "15m", kind: { key: "label.zone.supply" } } },
+    "th",
+  );
+  assert.ok(sentence.includes("แล้วเกิดการเคลื่อนไหวที่อ่านไม่ชัด กลับเข้ามาหา"), sentence);
+});
+
+test("a price inside a sentence is written at the instrument's own precision", () => {
+  // Both of these sentences name a level in prose, and both used to hardcode
+  // five decimals — so a gold swing high reached the trader as "2312.69788",
+  // and a BTC level would have read "67000.00000". A typecheck cannot see it
+  // and a screenshot of the wrong instrument hides it, so it is pinned here.
+  assert.equal(priceText(2312.69788, requireAsset("XAUUSD").minTick), "2312.70");
+  assert.equal(priceText(1.08234567, requireAsset("EURUSD").minTick), "1.08235");
+
+  const gold = structuralStop(
+    "short",
+    2312.69788,
+    8.85,
+    { key: "label.side.swingHigh" },
+    requireAsset("XAUUSD").minTick,
+  );
+  assert.equal(gold.reason.vars?.price, "2312.70");
+
+  const be = breakEvenDecision({
+    direction: "long",
+    entryPrice: 1.08,
+    stopLoss: 1.078,
+    currentPrice: 1.0835,
+    newProtectedLevel: 1.08123456,
+    atrValue: 0.0008,
+    minTick: requireAsset("EURUSD").minTick,
+  });
+  assert.equal(be.reason.vars?.level, "1.08123");
 });
 
 test("MFE/MAE and R are measured from the candles after entry", () => {

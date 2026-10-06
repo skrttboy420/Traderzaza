@@ -1,6 +1,6 @@
 import type { ExplanationLevel, Locale, Setup, Trade } from "@atc/types";
 import { renderPhrase, renderPhrases } from "@atc/engine";
-import type { ChatRequest, CoachMode } from "./provider";
+import type { ChatIntent, ChatRequest, CoachMode } from "./provider";
 
 /**
  * Engine facts are handed to the model in the trader's own language, not in
@@ -25,8 +25,79 @@ const LEVEL_GUIDE: Record<ExplanationLevel, string> = {
 
 const MODE_GUIDE: Record<CoachMode, string> = {
   coach:
-    "COACH MODE: ask the trader what they see before telling them. Lead with a question, then give your read. Reinforce their process, do not replace it.",
+    "COACH MODE: ask the trader what they see before telling them. Open with ONE short question, then give your read in the same message — never stop at the question and wait. Reinforce their process, do not replace it.",
   direct: "DIRECT MODE: give the read immediately, no Socratic questioning.",
+};
+
+/**
+ * How long a chat answer is allowed to be, and how it should sound.
+ *
+ * The analysis path returns JSON into a laid-out panel, so the schema bounds
+ * its length. Chat is free prose and nothing bounded it at all, so a one-line
+ * question came back as an essay with headings — on a phone, next to a chart,
+ * that is text nobody finishes reading, and the sentence that mattered was
+ * buried in paragraph four.
+ *
+ * Two things this is careful NOT to do. It does not outrank the hard rules:
+ * shortening an answer by dropping the fact/interpretation distinction or by
+ * firming up a maybe would trade readable for wrong. And it does not ask for
+ * telegraphese — the request was spoken Thai, which is a register, not a word
+ * count. A short answer that reads like a log line is not what a trader wants
+ * either.
+ */
+const CHAT_BREVITY = `ANSWER LENGTH — this overrides the verbosity of the level guide above:
+- Answer the question that was asked, then stop. Aim for 3-5 short sentences;
+  do not exceed about 120 words unless the trader asks you to go deeper.
+- Put the answer in the first sentence. No preamble, no restating the question,
+  no "good question", no closing summary of an answer this short.
+- Quote only the numbers the question needs. Listing every level is not an
+  answer, it is a dump.
+- At most 3 bullets, and only for actual levels (entry / stop / target).
+  Never use # headings — the renderer does not support them and will print the
+  hashes. **bold** works; use it at most once.
+- Do not append the disclaimer. The screen already shows it once.
+- Keep FACT and INTERPRETATION separable in the wording instead of with
+  section headers: engine numbers get "the engine has / the level is", your own
+  reading gets "my read is / I would". Never present a read as a measurement.
+- Brevity never beats honesty. If the honest answer is "not enough data" or
+  "no trade", that is the entire answer — one sentence, no padding.`;
+
+/**
+ * Teach Me is the exception: the trader opened a seven-step walkthrough on
+ * purpose, so cutting it to four sentences would be answering a different
+ * question. It still gets the register rules — spoken, not academic — and a
+ * per-step budget, because "step by step" is not a licence for seven essays.
+ */
+const TEACH_LENGTH = `ANSWER LENGTH:
+- Cover every step you were asked for, in order, but keep each one to 2-3
+  spoken sentences. The whole lesson should read in under two minutes.
+- Label each step on its own line in **bold**. Never use # headings — the
+  renderer does not support them and will print the hashes.
+- Do not append the disclaimer. The screen already shows it once.`;
+
+/**
+ * Register, written in the target language on purpose.
+ *
+ * Telling a model in English to "reply in conversational Thai" reliably
+ * produces translated-textbook Thai — grammatical, stiff, and full of literal
+ * renderings of terms traders only ever say in English. Demonstrating the
+ * register in the language itself is what actually moves it, so the Thai block
+ * is Thai and names the specific mistranslations to avoid.
+ */
+const CHAT_REGISTER: Record<Locale, string> = {
+  th: `ภาษาและโทน:
+- ตอบเป็นภาษาไทยแบบภาษาพูด เหมือนเทรดเดอร์คุยกับเทรดเดอร์หน้าจอ ไม่ใช่รายงานวิชาการ
+- ห้ามแปลศัพท์เทคนิค เก็บไว้เป็นภาษาอังกฤษเสมอ: supply, demand, BOS, CHoCH,
+  pullback, entry, stop, target, R:R, ATR, timeframe และชื่อสินทรัพย์
+  ("อุปสงค์/อุปทาน" หรือ "กรอบเวลา" อ่านไม่รู้เรื่องสำหรับคนเทรด ห้ามใช้)
+- ถ้าต้องอธิบายศัพท์ ให้ขยายสั้นๆ ต่อท้ายในวงเล็บ ไม่ใช่ย่อหน้าใหม่
+- ตัวเลขและชื่อ timeframe เขียนเป็นเลขอารบิกและอังกฤษตามเดิม (4H, 1H, 15M, 5M)
+- ลงท้ายประโยคแบบคนพูดได้ ("อยู่" "นะ" "เลย") แต่ไม่ต้องสุภาพจัดจนยืดยาว`,
+  en: `LANGUAGE AND TONE:
+- Reply in English, spoken register — the way one trader talks to another at
+  the desk, not the way a report is written.
+- Keep the standard terms as they are: supply, demand, BOS, CHoCH, pullback,
+  R:R, ATR, and the timeframe labels (4H, 1H, 15M, 5M).`,
 };
 
 export const SYSTEM_PROMPT = `You are the analysis and coaching layer of a trading education platform.
@@ -122,13 +193,22 @@ is an empty array.`;
 }
 
 export function chatSystemPrompt(request: ChatRequest): string {
-  const parts = [SYSTEM_PROMPT, MODE_GUIDE[request.mode], LEVEL_GUIDE[request.level]];
+  const intent: ChatIntent = request.intent ?? "chat";
+  const parts = [SYSTEM_PROMPT];
 
-  parts.push(
-    request.locale === "th"
-      ? "Reply in Thai, the way a Thai trader speaks. Keep technical terms in English with a short Thai explanation."
-      : "Reply in English.",
-  );
+  // Coach mode is for free conversation only. The other three intents arrive
+  // as one structured instruction — a seven-step walkthrough, a scenario, a
+  // grading — and "open with a question about what you see" actively fights
+  // all three. Stacking them was producing a lesson that began by asking the
+  // trader to explain the thing they had just pressed a button to be taught.
+  if (intent === "chat") parts.push(MODE_GUIDE[request.mode]);
+
+  // Order matters: the length budget comes after the level guide so that it
+  // wins the conflict between "define every term" (beginner) and "keep it to
+  // four sentences". Later instructions are the ones models follow.
+  parts.push(LEVEL_GUIDE[request.level]);
+  parts.push(intent === "teach" ? TEACH_LENGTH : CHAT_BREVITY);
+  parts.push(CHAT_REGISTER[request.locale]);
 
   if (request.setup) {
     parts.push(`CURRENT CHART CONTEXT (facts from the engine — use these numbers only):
@@ -157,8 +237,15 @@ function journalLine(t: Trade): string {
   }R MFE ${t.mfeR ?? "n/a"}R MAE ${t.maeR ?? "n/a"}R classification ${t.classification ?? "unclassified"} tags [${t.psychology.join(", ")}]`;
 }
 
-export function teachMePrompt(setup: Setup, locale: Locale, level: ExplanationLevel): string {
-  return `Teach the trader this exact setup using the chart in front of them, step by step, in the order they trade it:
+/**
+ * The three structured intents below deliberately no longer restate the level
+ * guide or the language. `chatSystemPrompt` already carries both, in a stronger
+ * and more specific form — and a flatter "Write in Thai" arriving *after* it in
+ * the user turn was diluting the register block rather than reinforcing it.
+ * One instruction per thing, in the place that owns it.
+ */
+export function teachMePrompt(setup: Setup, locale: Locale): string {
+  return `Teach the trader this exact setup using the chart in front of them, step by step, in the order they trade it. One short labelled step each, 2-3 spoken sentences per step:
 1. What the higher timeframe is doing and how you know.
 2. Why this zone was marked and what made it qualify.
 3. What the pullback is telling you.
@@ -167,29 +254,25 @@ export function teachMePrompt(setup: Setup, locale: Locale, level: ExplanationLe
 6. Where the targets come from.
 7. What would make you drop this idea entirely.
 
-${LEVEL_GUIDE[level]}
-Write in ${locale === "th" ? "Thai, conversational, like a mentor talking" : "English"}.
 Use only these facts:
 ${factLines(setup, locale)}
 
-Return plain markdown, not JSON. Label each section clearly.`;
+Plain markdown, not JSON. Label each step in **bold** on its own line.`;
 }
 
-export function whatIfPrompt(
-  setup: Setup,
-  scenario: string,
-  locale: Locale,
-): string {
+export function whatIfPrompt(setup: Setup, scenario: string, locale: Locale): string {
   return `The trader is asking a "what if" question about the setup on screen.
 
 SCENARIO: ${scenario}
 
-Answer in three parts: what would have to be true on the chart for that scenario,
-what it would change about the plan (entry, stop, targets, or whether to trade at
-all), and what it would NOT change. Do not invent levels — reason from these facts:
-${factLines(setup, locale)}
+Answer in three short parts, one or two sentences each: what would have to be
+true on the chart for that scenario, what it would change about the plan (entry,
+stop, targets, or whether to trade at all), and what it would NOT change. The
+third part matters as much as the first — most scenarios change less than the
+trader expects, and saying so is the useful answer.
 
-Write in ${locale === "th" ? "Thai" : "English"}. Plain markdown.`;
+Do not invent levels. Reason from these facts:
+${factLines(setup, locale)}`;
 }
 
 export function gradeAnalysisPrompt(setup: Setup, userAnalysis: string, locale: Locale): string {
@@ -201,7 +284,9 @@ ${userAnalysis}
 ENGINE FACTS:
 ${factLines(setup, locale)}
 
-Respond with: what they got right, what they missed, what they read incorrectly
-and why, and the single most valuable habit to work on next. Be specific and
-reference the facts. Do not flatter. Write in ${locale === "th" ? "Thai" : "English"}.`;
+Cover four things, briefly: what they got right, what they missed, what they
+read incorrectly and why, and the single most valuable habit to work on next.
+One or two sentences each, and end on the habit — that is the part they act on.
+Be specific and quote the facts. Do not flatter, and do not invent a mistake to
+look rigorous: if the read was sound, say it was sound.`;
 }

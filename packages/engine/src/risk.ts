@@ -1,5 +1,5 @@
 import type { Asset, Candle, Phrase, RiskInput, RiskOutput, Trade } from "@atc/types";
-import { atrAt, clamp } from "./indicators";
+import { atrAt, clamp, priceText } from "./indicators";
 import { p } from "./phrases";
 
 /**
@@ -69,6 +69,8 @@ export function structuralStop(
   protectedLevel: number,
   atrValue: number,
   label: Phrase,
+  /** The instrument's tick, so the level named in the sentence reads correctly. */
+  minTick: number,
   padAtr = 0.3,
 ): StopSuggestion {
   const pad = Math.max(atrValue * padAtr, 0);
@@ -78,7 +80,7 @@ export function structuralStop(
     reason: p("risk.stop.structural", {
       pad: padAtr,
       level: label,
-      price: protectedLevel.toFixed(5),
+      price: priceText(protectedLevel, minTick),
     }),
   };
 }
@@ -102,8 +104,12 @@ export function breakEvenDecision(params: {
   /** Most recent swing that would protect the position if it holds. */
   newProtectedLevel: number | null;
   atrValue: number;
+  /** The instrument's tick. Optional so existing callers keep working; without
+   *  it the level in the sentence falls back to two decimals. */
+  minTick?: number;
 }): BreakEvenDecision {
   const { direction, entryPrice, stopLoss, currentPrice, newProtectedLevel, atrValue } = params;
+  const minTick = params.minTick ?? 0.01;
   const risk = Math.abs(entryPrice - stopLoss);
   if (risk <= 0) {
     return { move: false, price: null, reason: p("risk.be.noStopDistance") };
@@ -142,7 +148,7 @@ export function breakEvenDecision(params: {
     reason: p("risk.be.move", {
       progress: progressR,
       swing: p(direction === "long" ? "label.side.higherLow" : "label.side.lowerHigh"),
-      level: newProtectedLevel.toFixed(5),
+      level: priceText(newProtectedLevel, minTick),
     }),
   };
 }

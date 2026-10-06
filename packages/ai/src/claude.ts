@@ -1,4 +1,11 @@
-import type { AiProvider, AiProviderResult, AnalyzeRequest, ChatRequest } from "./provider";
+import type {
+  AiProvider,
+  AiProviderResult,
+  AnalyzeRequest,
+  ChatIntent,
+  ChatRequest,
+  ChatResult,
+} from "./provider";
 import { LocalExplainer, buildLocalAnalysis } from "./local";
 import { SYSTEM_PROMPT, analysisUserPrompt, chatSystemPrompt } from "./prompt";
 import { parseAiAnalysis, reconcileWithEngine } from "./schema";
@@ -9,6 +16,28 @@ export interface ClaudeConfig {
   maxTokens?: number;
   baseUrl?: string;
 }
+
+/**
+ * Token ceiling per intent.
+ *
+ * This is a cost and latency backstop, NOT the brevity mechanism. A hard cut at
+ * the ceiling truncates mid-sentence, which reads worse than a long answer;
+ * brevity is the prompt's job (see CHAT_BREVITY). These numbers only stop a
+ * runaway from filling the panel and the bill, so they are set generously
+ * enough that a compliant answer never reaches them.
+ *
+ * They are not smaller because of Thai. The tokeniser splits Thai into far more
+ * tokens per word than English, so the same 120-word answer costs roughly three
+ * times as much here — a ceiling tuned on English output would be clipping
+ * every Thai answer, which is the default locale.
+ */
+const MAX_TOKENS: Record<ChatIntent, number> = {
+  chat: 1200,
+  whatif: 1200,
+  grade: 1600,
+  // The walkthrough is seven steps the trader asked for on purpose.
+  teach: 3000,
+};
 
 interface MessagesResponse {
   content?: { type: string; text?: string }[];
@@ -67,20 +96,30 @@ export class ClaudeProvider implements AiProvider {
     }
   }
 
-  async chat(request: ChatRequest): Promise<{ content: string; source: "llm" | "deterministic" }> {
+  async chat(request: ChatRequest): Promise<ChatResult> {
     if (!this.available) return this.fallback.chat(request);
     try {
       const content = await this.call(
         chatSystemPrompt(request),
         request.messages.map((m) => ({ role: m.role, content: m.content })),
+        MAX_TOKENS[request.intent ?? "chat"],
       );
       return { content, source: "llm" };
-    } catch {
-      return this.fallback.chat(request);
+    } catch (error) {
+      // The answer still comes back — the deterministic explainer is a real
+      // answer, not an error page — but the reason the model did not write it
+      // travels with it. Swallowing this is how a mistyped key or an
+      // unreachable model name turns into "the AI just does not work", with
+      // nothing on screen distinguishing it from having set no key at all.
+      const fallback = await this.fallback.chat(request);
+      return {
+        ...fallback,
+        note: `${this.config.model}: ${error instanceof Error ? error.message : "request failed"}`,
+      };
     }
   }
 
-  /** Raw prose call, used by Teach Me / What If / grading. */
+  /** Raw prose call, for callers that build their own system prompt. */
   async complete(system: string, prompt: string): Promise<string> {
     return this.call(system, [{ role: "user", content: prompt }]);
   }
@@ -88,6 +127,7 @@ export class ClaudeProvider implements AiProvider {
   private async call(
     system: string,
     messages: { role: "user" | "assistant"; content: string }[],
+    maxTokens: number = this.config.maxTokens,
   ): Promise<string> {
     const response = await fetch(`${this.config.baseUrl}/v1/messages`, {
       method: "POST",
@@ -98,7 +138,7 @@ export class ClaudeProvider implements AiProvider {
       },
       body: JSON.stringify({
         model: this.config.model,
-        max_tokens: this.config.maxTokens,
+        max_tokens: maxTokens,
         system,
         messages,
       }),
