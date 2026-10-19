@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useT } from "@/i18n/provider";
 import { AccountChip } from "./AccountChip";
 import { LocaleSwitch } from "./LocaleSwitch";
+import { RefreshButton } from "./RefreshButton";
 import { ThemeSwitch } from "./ThemeSwitch";
 
 export function TopBar({ title, subtitle }: { title?: string; subtitle?: string }) {
@@ -26,6 +27,7 @@ export function TopBar({ title, subtitle }: { title?: string; subtitle?: string 
         {/* shrink-0 so a long symbol name in the title truncates instead of
             squeezing the controls out of reach on a phone. */}
         <div className="flex shrink-0 items-center gap-1.5">
+          <RefreshButton />
           <ThemeSwitch compact />
           <LocaleSwitch compact />
           <AccountChip />

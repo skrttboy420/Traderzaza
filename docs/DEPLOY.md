@@ -5,9 +5,10 @@ everything in `packages/*` is TypeScript source that Next compiles in place
 (see `transpilePackages` in `apps/web/next.config.ts`).
 
 It deploys with **zero environment variables set**. You will get a working app
-that labels every market `DEMO` and writes its explanations with the
-deterministic local explainer. Add keys to upgrade it — nothing breaks either
-way, and the UI always says which mode it is in.
+with live crypto and live forex — neither needs a key — gold labelled `DEMO`,
+and explanations written by the deterministic local explainer. Add keys to
+upgrade it; nothing breaks either way, and the UI always says which mode it
+is in.
 
 ---
 
@@ -67,11 +68,12 @@ Add these under **Project → Settings → Environment Variables**, scope
 
 | Variable | Needed for | If missing |
 |---|---|---|
-| `TWELVE_DATA_API_KEY` | XAUUSD, EURUSD, GBPUSD, USDJPY | those four fall back to the seeded mock and are badged `DEMO` |
+| `TWELVE_DATA_API_KEY` | XAUUSD | gold falls back to the seeded mock and is badged `DEMO`. It is the only market that still needs a key. |
 | `ENABLE_BINANCE` | BTCUSDT, ETHUSDT | defaults to `true`; crypto is `LIVE` with no key at all |
+| `ENABLE_YAHOO` | EURUSD, GBPUSD, USDJPY | defaults to `true`; forex is `LIVE` with no key at all. Set it to `false` only to hand the pairs back to Twelve Data. |
 | `ANTHROPIC_API_KEY` | AI-written explanations and coaching | the deterministic `LocalExplainer` writes them; every **number** is identical |
 | `ANTHROPIC_MODEL` | pinning a specific model | app default |
-| `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY` | settings / journal / positions / rules persisted per user | everything is stored in the browser's `localStorage` on that one device |
+| `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY` | accounts: sign-up, sign-in, sign-out | the auth screens say accounts are unavailable instead of failing on submit. Settings, journal, positions and rules are in `localStorage` either way — the database is not wired to them yet. |
 | `SUPABASE_SERVICE_ROLE_KEY` | creating accounts (`/api/auth/signup`), server-side writes that bypass RLS | sign-up only works if "Confirm email" is disabled on the project — see §4 |
 | `ENABLE_NEWS` | News screen, home risk strips, setup news block | defaults to `true`, needs no key |
 | `ENABLE_INVESTING_CALENDAR` | optional third calendar source | defaults to `false` — **leave it off on Vercel**, see below |
@@ -116,11 +118,13 @@ reports which source answered, and the UI prints it.
 
 ## 4. Database (optional)
 
-Without Supabase the app is fully usable but single-device: settings, rules,
-journal entries and positions live in `localStorage`, and the Settings screen
-says so.
+Supabase is used for **accounts only**. Settings, rules, journal entries and
+positions live in `localStorage` whether or not a database is connected, so the
+app is single-device either way and the Settings screen says exactly that rather
+than showing "Supabase" because the keys happen to be set. Wiring the store to
+the database is the top item in the README's next steps.
 
-To enable persistence:
+To enable accounts:
 
 1. Create a project at <https://supabase.com>.
 2. Run the files in `supabase/migrations/` **in numeric order** — either
@@ -177,12 +181,28 @@ instead of a full scan.
 
 ### Rate limits worth knowing
 
-Twelve Data's free tier is **8 requests/minute**. One full watchlist scan is
-four timeframes × four non-crypto symbols = 16 requests, so a cold scan can
-hit the limit and degrade individual symbols to `DEMO` with a reason attached.
-That is honest behaviour, not a bug, but it is the first thing to fix with a
-paid key if the app is used daily. The news reaction study already budgets for
-this: at most 10 releases priced, 4 slices in flight, 6-hour cache.
+Twelve Data's free tier is **8 credits/minute and 800/day**, and since Yahoo took
+over FX the only symbol still routed there is XAUUSD — four timeframes per scan
+rather than sixteen requests. One scan therefore costs half the minute's
+allowance, which is survivable alone but not twice: four screens scan the
+watchlist and all are `force-dynamic`, so two uncached loads inside a minute
+spend it. `MarketDataService` caches per symbol+timeframe+window with a TTL
+derived from the bar, and `CreditBudget` refuses a credit it cannot afford
+*before* issuing the request; when the allowance does run out the chart keeps the
+last real candles with their age rather than dropping to `DEMO`. The news
+reaction study budgets separately: at most 10 releases priced, 4 slices in
+flight, 6-hour cache.
+
+Two deployment-specific caveats. The budget and the cache live in **module
+state**, so on Vercel every warm instance keeps its own tally and the true spend
+across instances can exceed what any one of them sees — the limit still degrades
+gracefully, but do not read `/settings` as an authoritative provider total. And
+a cold start begins with an empty cache, so the first scan after an idle period
+always pays the full four credits.
+
+Binance and Yahoo are both keyless public endpoints with no published quota; if
+either starts refusing the host, the symbols degrade to `DEMO` with the reason
+attached rather than failing.
 
 ---
 
@@ -193,9 +213,9 @@ Open the deployment and check, in this order:
 1. **`/settings`** → the "Market data" and "AI assistant" cards tell you
    exactly which providers answered. This is the fastest way to confirm your
    keys landed.
-2. **`/`** → ranked setups render, and the data badge is what you expect
-   (`LIVE` for crypto, `DELAYED`/`LIVE` for gold and FX with a Twelve Data key,
-   `DEMO` without one).
+2. **`/`** → ranked setups render, and the data badge is what you expect:
+   `LIVE` for crypto and forex with no key at all, and gold either `DELAYED`
+   with a Twelve Data key or `DEMO` without one.
 3. **`/news`** → rows appear with stars and numbers, and the source line at the
    bottom of the panel says `tradingview`. Expand a release that already has an
    actual and confirm "see past reactions" returns measurements rather than
@@ -204,6 +224,55 @@ Open the deployment and check, in this order:
 
 If `/news` shows the demo badge, either `ENABLE_NEWS` is off or TradingView and
 ForexFactory both failed; the panel prints which.
+
+---
+
+## 7. Stopping a broken build from reaching the site
+
+This is a trading tool. A bug in the engine does not look like a crash — it
+looks like a slightly wrong number on a chart that you then act on. So the gate
+is in two places, because the two block different things.
+
+**1. GitHub Actions — `.github/workflows/ci.yml`.** On every push and every pull
+request to `main` it installs with a frozen lockfile and runs `pnpm verify`
+(typecheck + all 126 assertions), then `pnpm build`, then `pnpm lint`. You get a
+green tick or a red cross next to the commit on GitHub, and an email when it
+breaks.
+
+No secrets are passed to it, deliberately: the app is supposed to build and run
+with zero environment variables, so a build that only succeeds because a key was
+present is a bug this step should catch.
+
+What it does **not** do on its own is stop a deployment. Vercel builds whatever
+is pushed and does not ask GitHub whether the checks passed. On a repository
+where you push straight to `main`, a red cross and a live deployment of the same
+broken commit would appear side by side.
+
+**2. The Vercel build command — `apps/web/vercel.json`.**
+
+```json
+{ "buildCommand": "pnpm -w run verify && next build" }
+```
+
+That is the actual block. `pnpm -w run verify` runs the root `verify` script
+from inside `apps/web`, and `&&` means `next build` never starts if it fails. A
+failing test fails the Vercel build, and **a failed build is never promoted** —
+the previous deployment stays live. Nothing is passed to `verify` either, so it
+cannot pass on Vercel for a reason it would not pass locally.
+
+The cost is that every deploy runs the suite: roughly 30 seconds on top of the
+build. That is the right trade for this project.
+
+If you ever want to deploy a commit whose tests fail — to look at a UI change,
+say — change the build command in the Vercel dashboard rather than deleting
+this file, so the override is temporary and visible.
+
+### Optional: require the checks before merging
+
+Only worth doing once you work through pull requests rather than pushing to
+`main`. GitHub → Settings → Branches → add a rule for `main` → *Require status
+checks to pass before merging* → select `verify`. Then a red CI run blocks the
+merge, and the Vercel build command stops being the last line of defence.
 
 ---
 

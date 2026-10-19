@@ -334,6 +334,64 @@ test("risk calculator warns instead of silently accepting a bad stop", () => {
   assert.ok(hasKey(oversized.warnings, "risk.warn.riskPercentHigh"));
 });
 
+test("a size below the minimum lot is refused with a reason, never rounded into one", () => {
+  // The small-account case, which is the common one rather than the exotic one:
+  // $1,000 at 1% against a normal structural stop on gold. Rounding to two
+  // decimals used to turn an exact 0.0076 into a tradable 0.01 — 1.32% risk on
+  // a 1% instruction — and an exact 0.002 into 0.00, which slipped past a
+  // `> 0` guard and returned no size and no explanation whatsoever.
+  const gold = requireAsset("XAUUSD");
+
+  const roundsUp = calculateRisk({
+    accountBalance: 1000,
+    riskPercent: 1,
+    entryPrice: 4142.94,
+    stopLoss: 4156.15,
+    asset: gold,
+  });
+  assert.equal(roundsUp.positionSize, 0, "0.0076 must not be presented as a tradable 0.01");
+  assert.ok(hasKey(roundsUp.warnings, "risk.warn.belowMinLot"));
+
+  // The refusal has to be actionable, which means carrying the one number that
+  // decides what to do next: what the smallest tradable lot would actually
+  // cost. A 13.21-wide stop on gold risks $13.21 at 0.01 lots — 1.32% of a
+  // $1,000 account against the 1% asked for. Without this the trader is told
+  // the stop is "too wide for this account" and left to derive the rest.
+  const refusal = roundsUp.warnings.find((w) => w.key === "risk.warn.belowMinLot");
+  assert.deepEqual(refusal?.vars, {
+    minLot: 0.01,
+    minLotRisk: 13.21,
+    minLotPercent: 1.32,
+    riskPercent: 1,
+  });
+
+  const roundsToZero = calculateRisk({
+    accountBalance: 1000,
+    riskPercent: 1,
+    entryPrice: 4142.94,
+    stopLoss: 4192.94,
+    asset: gold,
+  });
+  assert.equal(roundsToZero.positionSize, 0);
+  assert.ok(
+    hasKey(roundsToZero.warnings, "risk.warn.belowMinLot"),
+    "a zero size must always carry its reason",
+  );
+
+  // The boundary itself stays tradable: a stop half as wide clears the minimum,
+  // which is the actionable half of the answer — tighten the stop or the
+  // account cannot take the trade.
+  const affordable = calculateRisk({
+    accountBalance: 1000,
+    riskPercent: 1,
+    entryPrice: 4142.94,
+    stopLoss: 4147.94,
+    asset: gold,
+  });
+  assert.equal(affordable.positionSize, 0.02);
+  assert.equal(affordable.warnings.length, 0);
+});
+
 test("break-even requires 1R plus a new protected swing", () => {
   const tooEarly = breakEvenDecision({
     direction: "long",
@@ -650,6 +708,31 @@ test("no template repeats a word the label it interpolates already carries", () 
   }
 
   assert.deepEqual(problems, [], `duplicated words in Thai templates:\n${problems.join("\n")}`);
+});
+
+test("every phrase interpolates the same variables in both locales", () => {
+  // The web dictionaries already assert this for the UI strings; the engine
+  // catalogue is the other half of the same surface and had no equivalent
+  // guard. It needs one more than the UI does, because there is no fallback
+  // here: a `{minLotRisk}` present in `en` and misspelt in `th` renders the
+  // literal braces to a Thai reader, and the number that was the whole point
+  // of the sentence never appears. Every phrase that carries a figure — a
+  // price, a risk percent, a lot size — fails silently and legibly wrong.
+  const names = (template: string): string[] =>
+    [...template.matchAll(/\{(\w+)\}/g)].map((m) => m[1] as string).sort();
+
+  const problems: string[] = [];
+  for (const [key, pair] of Object.entries(PHRASES) as [string, { en: string; th: string }][]) {
+    const en = names(pair.en);
+    const th = names(pair.th);
+    // Repeats are allowed and deliberate — a percentage worth stating twice in
+    // one sentence reads better than a pronoun — so compare the sets.
+    const enSet = [...new Set(en)].join(",");
+    const thSet = [...new Set(th)].join(",");
+    if (enSet !== thSet) problems.push(`${key}: en {${enSet}} vs th {${thSet}}`);
+  }
+
+  assert.deepEqual(problems, [], `variable mismatch between locales:\n${problems.join("\n")}`);
 });
 
 process.stdout.write(`\nengine.test.ts: ${passed} passed\n`);

@@ -5,7 +5,7 @@ import type { Asset, DataStatus, Setup, TrendState } from "@atc/types";
 
 import { DataStatusBadge } from "@/components/DataStatusBadge";
 import { TopBar } from "@/components/TopBar";
-import { Badge, Disclaimer, SectionTitle, cx } from "@/components/ui";
+import { Badge, Disclaimer, FeedFailure, SectionTitle, cx } from "@/components/ui";
 import { QUALITY_VISUAL, SCANNER_VISUAL } from "@/components/visual";
 import { useT } from "@/i18n/provider";
 import { formatPrice } from "@/lib/format";
@@ -43,6 +43,12 @@ export function MarketsView({ data }: { data: MarketsData }) {
 
       <main className="space-y-4 p-4">
         <SectionTitle title={t("markets.title")} subtitle={t("dashboard.subtitle")} />
+
+        <FeedFailure
+          title={tc(data.rows.length === 0 ? "feed.noneTitle" : "feed.partialTitle")}
+          hint={tc(data.rows.length === 0 ? "feed.noneHint" : "feed.partialHint")}
+          failed={data.failed}
+        />
 
         <ul className="space-y-2.5">
           {data.rows.map((row) => {
@@ -118,19 +124,6 @@ export function MarketsView({ data }: { data: MarketsData }) {
             );
           })}
         </ul>
-
-        {data.failed.length > 0 ? (
-          <section className="card border-l-2 border-l-[var(--color-short)] p-4">
-            <SectionTitle title={tc("state.error")} />
-            <ul className="space-y-1">
-              {data.failed.map((f) => (
-                <li key={f.symbol} className="text-[12px] text-[var(--color-muted)]">
-                  <span className="font-medium">{f.symbol}</span>: {f.reason}
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
 
         <Disclaimer text={tc("disclaimer")} />
       </main>

@@ -60,6 +60,15 @@ export function formatTime(unixSeconds: number, locale: Locale): string {
   });
 }
 
+/** Unix seconds -> "19 Oct", for a date that needs no time of day. */
+export function formatDayShort(unixSeconds: number, locale: Locale): string {
+  if (!unixSeconds) return "—";
+  return new Date(unixSeconds * 1000).toLocaleDateString(locale === "th" ? "th-TH" : "en-GB", {
+    day: "numeric",
+    month: "short",
+  });
+}
+
 export function formatAgo(unixSeconds: number, locale: Locale, now = Date.now()): string {
   if (!unixSeconds) return "—";
   const seconds = Math.max(0, Math.floor(now / 1000) - unixSeconds);

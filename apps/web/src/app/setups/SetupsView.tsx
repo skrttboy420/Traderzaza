@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import type { ScannerState, Setup } from "@atc/types";
+import type { DataStatus, ScannerState, Setup } from "@atc/types";
 
+import { DataStatusBadge } from "@/components/DataStatusBadge";
 import { SetupCard } from "@/components/SetupCard";
 import { TopBar } from "@/components/TopBar";
-import { Badge, Disclaimer, Empty, SectionTitle, cx } from "@/components/ui";
+import { Badge, Disclaimer, Empty, FeedFailure, SectionTitle, cx } from "@/components/ui";
 import { SCANNER_ORDER, SCANNER_VISUAL } from "@/components/visual";
 import { useT } from "@/i18n/provider";
 import { useSettings } from "@/lib/store";
@@ -13,6 +14,11 @@ import { useSettings } from "@/lib/store";
 export interface SetupsData {
   buckets: Record<ScannerState, Setup[]>;
   scannedAt: number;
+  /** Markets that produced a reading. Zero means the buckets are empty for
+   *  want of data, not for want of a setup. */
+  measured: number;
+  weakestStatus: DataStatus;
+  failed: { symbol: string; reason: string }[];
 }
 
 /**
@@ -35,6 +41,18 @@ export function SetupsView({ data }: { data: SetupsData }) {
       <TopBar title={t("setups.title")} subtitle={t("setups.subtitle")} />
 
       <main className="space-y-4 p-4">
+        {/* This screen ranks setups without showing a chart, which makes it the
+            easiest place to forget what the prices behind the ranking are. */}
+        <div className="flex justify-end">
+          <DataStatusBadge status={data.weakestStatus} compact />
+        </div>
+
+        <FeedFailure
+          title={tc(data.measured === 0 ? "feed.noneTitle" : "feed.partialTitle")}
+          hint={tc(data.measured === 0 ? "feed.noneHint" : "feed.partialHint")}
+          failed={data.failed}
+        />
+
         <div className="scroll-x -mx-1 flex gap-1.5 px-1">
           <button
             type="button"
@@ -81,7 +99,7 @@ export function SetupsView({ data }: { data: SetupsData }) {
           {t("setups.invalidatedKept")}
         </p>
 
-        {total === 0 ? <Empty title={t("dashboard.noOpportunities")} /> : null}
+        {total === 0 && data.measured > 0 ? <Empty title={t("dashboard.noOpportunities")} /> : null}
 
         {visibleStates.map((state) => {
           const setups = data.buckets[state] ?? [];

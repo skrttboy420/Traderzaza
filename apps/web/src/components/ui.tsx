@@ -165,12 +165,69 @@ export function Progress({ value, tone = "bg-[var(--color-limit)]" }: { value: n
   );
 }
 
+/**
+ * Nothing to show because nothing qualified. A result, not a malfunction.
+ *
+ * Its counterpart is `FeedFailure` below, which is the *other* kind of nothing:
+ * no data arrived, so there is no result to read at all. They are two
+ * components rather than one with a flag because the mistake worth designing
+ * against is a dead feed being read as a quiet market — and a flag is one
+ * careless `false` away from exactly that.
+ */
 export function Empty({ title, hint }: { title: string; hint?: string }) {
   return (
     <div className="card flex flex-col items-center justify-center gap-1 p-8 text-center">
+      <span aria-hidden className="text-[12px] leading-none text-[var(--color-faint)]">
+        ○
+      </span>
       <p className="text-[13.5px] font-medium text-[var(--color-muted)]">{title}</p>
       {hint ? <p className="max-w-sm text-[12px] leading-relaxed text-[var(--color-faint)]">{hint}</p> : null}
     </div>
+  );
+}
+
+/**
+ * Markets whose data never arrived, and the reason each one gave.
+ *
+ * Amber rather than the red this used to be: in a trading UI red already means
+ * *short*, and a feed that timed out is a statement about the data, not about
+ * direction. Amber with `⚠` is the same pairing the DEMO badge uses, which is
+ * the nearest neighbour concept — prices you must not act on.
+ *
+ * Callers render this **above** the results, never below. A feed that did not
+ * answer is context you need before you read the ranking, not a footnote after
+ * you have already read it.
+ */
+export function FeedFailure({
+  title,
+  hint,
+  failed,
+}: {
+  title: string;
+  hint: string;
+  failed: { symbol: string; reason: string }[];
+}) {
+  if (failed.length === 0) return null;
+
+  return (
+    <section className="card border-l-2 border-l-[var(--color-wait)] p-4">
+      <div className="mb-2 flex items-start gap-2">
+        <span aria-hidden className="text-[13px] leading-none text-[var(--color-wait)]">
+          ⚠
+        </span>
+        <div className="min-w-0">
+          <h2 className="text-[14px] font-semibold tracking-tight text-[var(--color-wait)]">{title}</h2>
+          <p className="mt-0.5 text-[12px] leading-relaxed text-[var(--color-muted)]">{hint}</p>
+        </div>
+      </div>
+      <ul className="space-y-1">
+        {failed.map((f) => (
+          <li key={f.symbol} className="text-[12px] text-[var(--color-faint)]">
+            <span className="font-medium text-[var(--color-muted)]">{f.symbol}</span>: {f.reason}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

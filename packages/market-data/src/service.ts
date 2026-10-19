@@ -2,15 +2,58 @@ import type { Candle, DataStatus, Timeframe } from "@atc/types";
 import { BinanceMarketDataProvider } from "./binance";
 import { MockMarketDataProvider } from "./mock";
 import { TwelveDataProvider } from "./twelvedata";
+import type { CreditSnapshot } from "./twelvedata";
 import type { CandleRequest, CandleResponse, MarketDataProvider } from "./types";
+import { TIMEFRAME_SECONDS } from "./types";
+import { YahooFinanceProvider } from "./yahoo";
 
 export interface ProviderConfig {
   twelveDataApiKey?: string | undefined;
   /** Set false to disable the keyless Binance feed (for offline development). */
   enableBinance?: boolean;
+  /**
+   * Set false to disable the keyless Yahoo FX feed. Worth having as a switch
+   * because there is no key to remove: if Yahoo starts refusing the host, this
+   * is the only way to hand the pairs back to TwelveData.
+   */
+  enableYahoo?: boolean;
   /** Forces the demo provider for every symbol. */
   forceDemo?: boolean;
   twelveDataQuality?: "LIVE" | "DELAYED";
+  /**
+   * Divides the bar duration to get a cache lifetime. Higher means fresher
+   * data and more requests; the default of 4 keeps a 5M bar under ~75s old.
+   */
+  freshnessDivisor?: number;
+}
+
+/**
+ * How long a response for this timeframe stays fresh.
+ *
+ * Tied to the bar rather than fixed, because staleness only matters relative
+ * to how fast the series moves: 60 seconds is most of a 5M bar's life and
+ * nothing at all on a 4H. The floor stops 1M charts from fetching per render;
+ * the ceiling stops a 4H bar from being trusted for half a session.
+ */
+export function candleTtlSeconds(timeframe: Timeframe, divisor = 4): number {
+  const bar = TIMEFRAME_SECONDS[timeframe];
+  return Math.min(Math.max(Math.floor(bar / Math.max(divisor, 1)), 15), 1800);
+}
+
+interface CacheEntry {
+  response: CandleResponse;
+  storedAt: number;
+}
+
+/** The window belongs in the key: a historical slice is a different series. */
+function cacheKey(request: CandleRequest): string {
+  return [
+    request.symbol.toUpperCase(),
+    request.timeframe,
+    request.limit,
+    request.startTime ?? "",
+    request.endTime ?? "",
+  ].join("|");
 }
 
 /**
@@ -22,6 +65,9 @@ export function createProviders(config: ProviderConfig = {}): MarketDataProvider
 
   const providers: MarketDataProvider[] = [];
   if (config.enableBinance !== false) providers.push(new BinanceMarketDataProvider());
+  // Ahead of TwelveData on purpose: Yahoo FX is realtime and keyless, where the
+  // TwelveData free tier is delayed.
+  if (config.enableYahoo !== false) providers.push(new YahooFinanceProvider());
   if (config.twelveDataApiKey) {
     providers.push(new TwelveDataProvider(config.twelveDataApiKey, config.twelveDataQuality ?? "DELAYED"));
   }
@@ -36,14 +82,34 @@ export interface MtfResponse {
 
 export class MarketDataService {
   private readonly providers: MarketDataProvider[];
+  private readonly freshnessDivisor: number;
+  private readonly cache = new Map<string, CacheEntry>();
 
-  constructor(providers: MarketDataProvider[]) {
+  constructor(providers: MarketDataProvider[], freshnessDivisor = 4) {
     if (providers.length === 0) throw new Error("MarketDataService needs at least one provider");
     this.providers = providers;
+    this.freshnessDivisor = freshnessDivisor;
   }
 
   static fromConfig(config: ProviderConfig = {}): MarketDataService {
-    return new MarketDataService(createProviders(config));
+    return new MarketDataService(createProviders(config), config.freshnessDivisor ?? 4);
+  }
+
+  /** Overridable so the cache's time-dependent behaviour is testable. */
+  protected now(): number {
+    return Math.floor(Date.now() / 1000);
+  }
+
+  /**
+   * The metered provider's allowance, or null when nothing in the chain is
+   * metered. Exposed so the UI can show the budget rather than only reacting
+   * to it: "gold is on DEMO" is a symptom, "7 of 8 credits spent this minute"
+   * is the cause, and the trader can tell the two apart only if shown both.
+   * TwelveData is the only paid-tier feed here; Binance and Yahoo are keyless.
+   */
+  creditSnapshot(): CreditSnapshot | null {
+    const metered = this.providers.find((p): p is TwelveDataProvider => p instanceof TwelveDataProvider);
+    return metered ? metered.budget.snapshot() : null;
   }
 
   providerFor(symbol: string): MarketDataProvider {
@@ -53,13 +119,55 @@ export class MarketDataService {
     return match ?? (fallback as MarketDataProvider);
   }
 
-  /** Falls back to demo data on provider failure, and says so in the status note. */
+  /**
+   * Cached, with a three-step fallback: fresh → stale-but-real → demo.
+   *
+   * The cache is not an optimisation, it is what makes a metered free tier
+   * usable at all. Four screens scan the watchlist and every one of them is
+   * `force-dynamic`, so without this a trader clicking between Home and Setups
+   * spends eight TwelveData credits out of an allowance of eight per minute.
+   *
+   * The ordering of the fallback is the part worth defending. When the feed
+   * refuses, real candles from four minutes ago beat synthetic candles from
+   * this instant: the levels on them were actually traded, which is the only
+   * reason to look at a chart. Demo data is the last resort, not the first.
+   * Either way the status carries the reason and the age, so the screen can
+   * say which of the three it is showing.
+   *
+   * Only real responses are cached. Storing a demo fallback would pin
+   * synthetic prices in place for the whole TTL after one failed request.
+   */
   async getCandles(request: CandleRequest): Promise<CandleResponse> {
     const provider = this.providerFor(request.symbol);
+    const key = cacheKey(request);
+    const now = this.now();
+
+    const cached = this.cache.get(key);
+    if (cached && now - cached.storedAt < candleTtlSeconds(request.timeframe, this.freshnessDivisor)) {
+      return cached.response;
+    }
+
     try {
-      return await provider.fetchCandles(request);
+      const response = await provider.fetchCandles(request);
+      if (response.status.quality !== "DEMO") this.cache.set(key, { response, storedAt: now });
+      return response;
     } catch (error) {
       const reason = error instanceof Error ? error.message : "unknown error";
+
+      if (cached) {
+        const age = now - cached.storedAt;
+        return {
+          candles: cached.response.candles,
+          status: {
+            ...cached.response.status,
+            // Real prices, but no longer current. Claiming LIVE for a series
+            // that stopped updating is the lie this whole file exists to avoid.
+            quality: cached.response.status.quality === "LIVE" ? "DELAYED" : cached.response.status.quality,
+            note: `Live feed unavailable (${reason}). Showing the last real candles, ${age}s old.`,
+          },
+        };
+      }
+
       const demo = new MockMarketDataProvider();
       const result = await demo.fetchCandles(request);
       result.status.note = `Live feed unavailable (${reason}). Showing DEMO data instead.`;

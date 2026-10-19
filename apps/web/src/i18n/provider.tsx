@@ -109,11 +109,13 @@ export interface PhraseRenderer {
  */
 export function usePhrase(): PhraseRenderer {
   const { locale } = useLocale();
-  return useMemo(() => {
-    const render = ((phrase: Phrase) => renderPhrase(phrase, locale)) as PhraseRenderer;
-    render.all = (phrases: Phrase[]) => renderPhrases(phrases, locale);
-    return render;
-  }, [locale]);
+  return useMemo(
+    () =>
+      Object.assign((phrase: Phrase) => renderPhrase(phrase, locale), {
+        all: (phrases: Phrase[]) => renderPhrases(phrases, locale),
+      }),
+    [locale],
+  );
 }
 
 /** For components that need more than one namespace. */

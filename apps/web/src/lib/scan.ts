@@ -12,17 +12,42 @@ import { serverEnv } from "./env";
  * dashboard and the API disagreeing.
  */
 
-let cachedService: MarketDataService | null = null;
+/**
+ * Held on `globalThis`, not in a module variable.
+ *
+ * Next.js compiles pages and route handlers into separate bundles, so a
+ * module-level singleton is instantiated once per bundle rather than once per
+ * process. That was measurable: with the candle cache cold, loading `/markets`
+ * — which scans gold and silver — left the credit counter untouched, while a
+ * single `/api/candles` call moved it. Two services, two caches, two tallies.
+ *
+ * Both halves of that are real costs on an 8-per-minute budget. The same gold
+ * candles were fetched twice, once for the page's scan and again for the chart
+ * the page embeds, and the counter shown on the settings screen only ever saw
+ * the route handlers' half — so it under-reported the spend it exists to make
+ * visible, which is worse than showing nothing.
+ *
+ * `Symbol.for` keeps it off the global namespace proper, and surviving HMR in
+ * development is a side benefit: an edit no longer silently empties the cache.
+ */
+const SERVICE_KEY = Symbol.for("atc.marketService");
+
+type ServiceHost = typeof globalThis & { [SERVICE_KEY]?: MarketDataService };
 
 export function marketService(): MarketDataService {
-  if (cachedService) return cachedService;
+  const host = globalThis as ServiceHost;
+  const existing = host[SERVICE_KEY];
+  if (existing) return existing;
+
   const env = serverEnv();
-  cachedService = MarketDataService.fromConfig({
+  const service = MarketDataService.fromConfig({
     twelveDataApiKey: env.twelveDataApiKey,
     enableBinance: env.enableBinance,
+    enableYahoo: env.enableYahoo,
     forceDemo: env.forceDemo,
   });
-  return cachedService;
+  host[SERVICE_KEY] = service;
+  return service;
 }
 
 export interface AnalyzeOptions {

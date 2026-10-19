@@ -7,7 +7,7 @@ import { DataStatusBadge } from "@/components/DataStatusBadge";
 import { NewsRiskStrip } from "@/components/NewsPanel";
 import { SetupCard } from "@/components/SetupCard";
 import { TopBar } from "@/components/TopBar";
-import { Badge, Disclaimer, Empty, SectionTitle, cx } from "@/components/ui";
+import { Badge, Disclaimer, Empty, FeedFailure, SectionTitle, cx } from "@/components/ui";
 import { SCANNER_ORDER, SCANNER_VISUAL } from "@/components/visual";
 import { useLocale, useT } from "@/i18n/provider";
 import { formatAgo } from "@/lib/format";
@@ -33,6 +33,11 @@ export function HomeView({ data }: { data: HomeData }) {
     () => data.opportunities.filter(({ setup }) => setup.status !== "INVALIDATED"),
     [data.opportunities],
   );
+
+  // How many markets actually produced a reading. At zero, "nothing qualifies"
+  // would be a claim about markets nobody looked at, so the empty state is
+  // withheld and the feed notice carries the page instead.
+  const measured = data.scans.length;
 
   return (
     <>
@@ -78,9 +83,13 @@ export function HomeView({ data }: { data: HomeData }) {
           </p>
         </section>
 
-        {top.length === 0 ? (
-          <Empty title={t("dashboard.noOpportunities")} hint={t("setups.invalidatedKept")} />
-        ) : (
+        <FeedFailure
+          title={tc(measured === 0 ? "feed.noneTitle" : "feed.partialTitle")}
+          hint={tc(measured === 0 ? "feed.noneHint" : "feed.partialHint")}
+          failed={data.failed}
+        />
+
+        {top.length > 0 ? (
           <ul className="space-y-2.5">
             {top.map(({ setup, rank }) => (
               <li key={setup.id}>
@@ -88,7 +97,9 @@ export function HomeView({ data }: { data: HomeData }) {
               </li>
             ))}
           </ul>
-        )}
+        ) : measured > 0 ? (
+          <Empty title={t("dashboard.noOpportunities")} hint={t("setups.invalidatedKept")} />
+        ) : null}
 
         {/* One strip per watchlist market, and only when a high-impact release
             is actually close. On a clear day this renders nothing at all. */}
@@ -128,19 +139,6 @@ export function HomeView({ data }: { data: HomeData }) {
             })}
           </ul>
         </section>
-
-        {data.failed.length > 0 ? (
-          <section className="card border-l-2 border-l-[var(--color-short)] p-4">
-            <SectionTitle title={tc("state.error")} />
-            <ul className="space-y-1">
-              {data.failed.map((f) => (
-                <li key={f.symbol} className="text-[12px] text-[var(--color-muted)]">
-                  <span className="font-medium">{f.symbol}</span>: {f.reason}
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
 
         <Disclaimer text={tc("disclaimer")} />
       </main>

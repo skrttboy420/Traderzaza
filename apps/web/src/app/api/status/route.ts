@@ -35,5 +35,12 @@ export async function GET() {
     /** Present so the user can see which model would be used, not the key. */
     aiModel: env.anthropicApiKey ? (env.anthropicModel ?? "claude (default)") : null,
     providers,
+    /**
+     * Counts, not keys. The metered feed is the one thing here that can stop
+     * working through ordinary use rather than through a fault, so the budget
+     * is worth showing: it turns "gold went DEMO" from a mystery into a number
+     * the trader can read. Null when no metered provider is configured.
+     */
+    quota: service.creditSnapshot(),
   });
 }

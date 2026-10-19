@@ -1,0 +1,53 @@
+name: CI
+
+# Runs the same gate a human runs locally — `pnpm verify` — on every push and
+# every pull request, so a commit that breaks the engine is visible as a red
+# cross on GitHub rather than as a wrong number on a chart.
+#
+# This alone does not stop Vercel deploying: Vercel builds whatever is pushed.
+# The deploy-side block is the Vercel build command, which runs `verify` before
+# `build` so a failing test fails the deployment. See docs/DEPLOY.md §7.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# A second push to the same branch makes the first run pointless, so cancel it.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Reads the pnpm version from the "packageManager" field in package.json,
+      # so CI and the dev machine cannot drift onto different pnpm majors.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      # --frozen-lockfile fails rather than silently resolving a newer version,
+      # which is the whole point of running this in CI.
+      - run: pnpm install --frozen-lockfile
+
+      - name: Typecheck and test
+        run: pnpm verify
+
+      - name: Build
+        run: pnpm build
+        # No secrets here on purpose. The app is designed to build and run with
+        # zero environment variables, so a build that needs a key to succeed is
+        # a bug this step should catch.
+
+      - name: Lint
+        run: pnpm lint

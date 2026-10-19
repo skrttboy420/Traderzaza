@@ -35,6 +35,7 @@ const SECTIONS: {
   { id: "positions", glyph: "⊞", items: 3, href: "/positions", linkKey: "nav.positions" },
   { id: "journal", glyph: "✎", items: 3, href: "/journal", linkKey: "nav.journal" },
   { id: "training", glyph: "⟳", items: 3, href: "/training", linkKey: "nav.training" },
+  { id: "account", glyph: "◇", items: 5, body: true, href: "/settings", linkKey: "nav.settings" },
   { id: "limits", glyph: "⚠", items: 5, body: true },
 ];
 
@@ -57,13 +58,21 @@ export function GuideView() {
         </section>
 
         {/* Jump list. On a phone this page is long, and the section someone
-            actually wants is usually not the first one. */}
-        <nav aria-label={t("title")} className="scroll-x -mx-1 flex gap-1.5 px-1 pb-1">
+            actually wants is usually not the first one.
+
+            It wraps rather than scrolls. The other `scroll-x` strips are
+            filters where the first few options are the common ones and the
+            rest are a long tail, so hiding the tail off the right edge costs
+            little. This is a table of contents: every entry is equally likely
+            to be the one wanted, and these nine Thai labels ran to 1709px in
+            an 892px column, so over half the page's sections were invisible
+            and — with the scrollbar hidden — unreachable with a mouse. */}
+        <nav aria-label={t("title")} className="-mx-1 flex flex-wrap gap-1.5 px-1 pb-1">
           {SECTIONS.map((section) => (
             <a
               key={section.id}
               href={`#${section.id}`}
-              className="shrink-0 rounded-lg border border-[var(--color-border)] px-2.5 py-1.5 text-[11.5px] font-medium text-[var(--color-muted)]"
+              className="rounded-lg border border-[var(--color-border)] px-2.5 py-1.5 text-[11.5px] font-medium text-[var(--color-muted)]"
             >
               <span aria-hidden className="mr-1.5 text-[10px]">
                 {section.glyph}

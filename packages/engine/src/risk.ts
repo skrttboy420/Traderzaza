@@ -2,6 +2,9 @@ import type { Asset, Candle, Phrase, RiskInput, RiskOutput, Trade } from "@atc/t
 import { atrAt, clamp, priceText } from "./indicators";
 import { p } from "./phrases";
 
+/** The smallest lot a retail broker will accept. */
+const MIN_LOT = 0.01;
+
 /**
  * Position sizing. Lots for instruments with a pip value, units for crypto.
  * Never silently rounds a stop: an invalid stop returns size 0 plus a warning.
@@ -37,11 +40,33 @@ export function calculateRisk(input: RiskInput): RiskOutput {
     positionSize = Number(positionSize.toFixed(6));
   } else {
     const riskPerLot = stopDistancePips * asset.pipValuePerLot;
-    positionSize = riskPerLot > 0 ? riskAmount / riskPerLot : 0;
-    positionSize = Number(positionSize.toFixed(2));
-    if (positionSize > 0 && positionSize < 0.01) {
-      warnings.push(p("risk.warn.belowMinLot"));
+    // Compared before rounding, because rounding is what hid this. At two
+    // decimals an exact 0.0076 became a tradable 0.01 — a third more risk than
+    // the trader asked for, silently — and an exact 0.002 became 0.00, which
+    // failed the old `> 0` guard and returned no size and no reason at all.
+    // Both are the same bug and a small account meets them constantly: on a
+    // $1,000 balance at 1%, a normal structural stop on gold already lands
+    // here. The size is refused rather than rounded, because a stop too wide
+    // for the account is a fact about the account and silently trading it at
+    // the broker minimum is how a small account dies.
+    const exactSize = riskPerLot > 0 ? riskAmount / riskPerLot : 0;
+    if (exactSize < MIN_LOT) {
+      // Naming the cost of the smallest tradable lot, and what share of this
+      // balance it is, because "too wide for this account" on its own leaves
+      // the trader to work out the one number that decides what to do next.
+      const minLotRisk = riskPerLot * MIN_LOT;
+      warnings.push(
+        p("risk.warn.belowMinLot", {
+          minLot: MIN_LOT,
+          minLotRisk: Number(minLotRisk.toFixed(2)),
+          minLotPercent:
+            accountBalance > 0 ? Number(((minLotRisk / accountBalance) * 100).toFixed(2)) : 0,
+          riskPercent,
+        }),
+      );
       positionSize = 0;
+    } else {
+      positionSize = Number(exactSize.toFixed(2));
     }
   }
 

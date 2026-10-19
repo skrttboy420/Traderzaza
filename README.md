@@ -16,11 +16,12 @@ the trade.**
 
 ## 1. What is actually built
 
-Eleven screens, all live and reachable from the bottom navigation:
+Eleven screens on the bottom navigation, plus a setup-detail route and the two auth pages:
 
 | Screen | Path | What it does |
 |---|---|---|
 | **Home** | `/` | Proactive: opens straight onto "here are the best opportunities right now", market health, and what to do next. No question required. |
+| **Signal** | `/signal` | Only the markets actually calling a trade, grouped by readiness rather than flattened into one score-sorted list — "enter now" and "leave a resting order at a price we have not reached" are different actions. |
 | **Markets** | `/markets` | Per-asset trend/phase/regime, data quality, MTF agreement. |
 | **Setups** | `/setups` | The multi-asset scanner: Top Opportunities plus the five buckets (ENTRY_NOW, WAIT_CONFIRMATION, LIMIT_ZONE, WATCHLIST, NO_TRADE). |
 | **Setup detail** | `/setups/[symbol]` | Chart with toggleable layers, score breakdown, WHY ENTER / WHY WAIT, FACT / INTERPRETATION / ASSUMPTION blocks, three trade plans, invalidation, risk calculator, news for that market, "Teach me this setup". |
@@ -30,7 +31,8 @@ Eleven screens, all live and reachable from the bottom navigation:
 | **Coach** | `/coach` | Chat with the coach in Coach or Direct mode at three explanation levels, psychology patterns from journal evidence, weekly report, 27-term glossary. |
 | **Training** | `/training` | Candle-by-candle market replay. Play / pause / next / fast-forward / reset, make your call, get scored. Every practice trade is kept with the entry price, the SL and TP you placed, where price actually went, and the result in R — not just "right" or "wrong". No future candles leak. |
 | **Guide** | `/guide` | The in-app usage guide: what each screen is for, what the Setup Quality Score does and does not mean, whether the chart is delayed, and what the app cannot do. TH + EN. |
-| **Settings** | `/settings` | Account & risk, watchlist, timeframes, data sources with per-symbol provider + quality, AI, alerts, display, storage, honest limitations. |
+| **Settings** | `/settings` | The account panel, risk, watchlist, timeframes, data sources with per-symbol provider + quality, AI, alerts, display, storage, honest limitations. |
+| **Sign in / Sign up** | `/login`, `/signup` | Username and password, no email. Not linked from the nav and not required by any screen — reachable from the account chip in the top bar. |
 
 ### The thing that matters most: who computes what
 
@@ -73,23 +75,28 @@ ai-trading-coach/
 ├── tsconfig.base.json            strict: true, noUncheckedIndexedAccess: true
 ├── tsconfig.check.json           whole-monorepo typecheck entry
 ├── .env.example                  every variable, with a description of what breaks without it
+├── .github/workflows/ci.yml      typecheck + tests + build + lint on every push and PR
 ├── supabase/
 │   └── migrations/
-│       └── 0001_init.sql         22 enums, 28 tables, RLS on every table, signup trigger
+│       ├── 0001_init.sql         22 enums, 28 tables, RLS on every table
+│       └── 0002_auth_profile.sql trigger that provisions users / user_settings /
+│                                 watchlists on signup, so an account can never exist
+│                                 without its profile rows; plus a backfill
 ├── docs/
 │   └── DEPLOY.md                  Vercel deployment, step by step, with the known limits
 ├── packages/
 │   ├── types/                    the single source of truth for every shared type
 │   │   └── src/index.ts          Timeframe, Asset, Candle, Swing, Structure, Zone, Setup,
 │   │                             Trade, PsychologyTag, TIMEFRAMES, MTF_CHAIN, ...
-│   ├── market-data/              provider interface + three implementations
+│   ├── market-data/              provider interface + four implementations
 │   │   ├── types.ts              MarketDataProvider, CandleRequest (incl. startTime/endTime
 │   │   │                         so the news study can price a 30-minute window that
 │   │   │                         happened eight months ago), DataStatus
 │   │   ├── assets.ts             the 6 assets, DEFAULT_WATCHLIST, REFERENCE_PRICES
 │   │   ├── mock.ts               seeded (mulberry32) synthetic candles  → quality DEMO
 │   │   ├── binance.ts            keyless public REST, crypto             → quality LIVE
-│   │   ├── twelvedata.ts         keyed REST, metals + FX                 → quality LIVE
+│   │   ├── yahoo.ts              keyless public REST, FX                 → quality LIVE
+│   │   ├── twelvedata.ts         keyed REST, metals                      → quality DELAYED
 │   │   └── service.ts            picks a provider per symbol, falls back honestly
 │   ├── engine/                   ALL the maths. No network, no LLM, no React.
 │   │   ├── indicators.ts         ATR, EMA, swing detection, displacement
@@ -124,20 +131,23 @@ ai-trading-coach/
 │       ├── local.ts              LocalExplainer: deterministic prose, zero API key
 │       └── provider.ts           createAiProvider() + guardLanguage() banned-phrase guard
 └── apps/web/                     Next.js 16 + React 19 + Tailwind v4
+    ├── vercel.json               the deploy gate: `verify` must pass before `next build`
     └── src/
         ├── app/
-        │   ├── layout.tsx        dark terminal shell, i18n provider, bottom nav
+        │   ├── layout.tsx        terminal shell, theme + i18n + auth providers, bottom nav
         │   ├── page.tsx + HomeView.tsx
-        │   ├── markets/ setups/ setups/[symbol]/ news/ positions/ journal/ coach/
-        │   │   training/ guide/ settings/
+        │   ├── signal/ markets/ setups/ setups/[symbol]/ news/ positions/ journal/
+        │   │   coach/ training/ guide/ settings/ login/ signup/
         │   └── api/              candles, analysis, scan, status, news, news/reaction,
-        │                         ai/analyze, ai/chat
+        │                         ai/analyze, ai/chat, auth/signup
         ├── components/           PriceChart (lightweight-charts), SetupCard, ScoreBreakdown,
         │                         FactBlock, PlansPanel, AiPanel, RiskCalculator, JournalForm,
-        │                         NewsPanel + NewsRiskStrip, ui.tsx
+        │                         NewsPanel + NewsRiskStrip, AuthForm, AccountChip,
+        │                         AccountPanel, ThemeSwitch, ui.tsx
         ├── i18n/
         │   ├── provider.tsx      React-context i18n, instant switch, persisted, default Thai
-        │   └── locales/{th,en}/{common,trading,coach,journal,settings,news,guide}.json
+        │   ├── locales/{th,en}/{common,trading,coach,journal,settings,news,guide,auth}.json
+        │   └── dictionaries.test.ts  the two locale trees must stay key-for-key identical
         └── lib/
             ├── env.ts            server-only env reader + capability booleans
             ├── scan.ts           fetch candles → run engine (server side)
@@ -145,9 +155,13 @@ ai-trading-coach/
             │                     budgeted for a free data tier (10 releases, 4 in flight)
             ├── settings.ts       UserSettings + DEFAULT_SETTINGS + mergeSettings
             ├── store.ts          localStorage persistence: settings, journal, rules
+            ├── supabase.ts       browser client + the username ⇄ synthetic-address mapping
+            ├── auth.tsx          useAuth(): session state, sign in / up / out
+            ├── theme.tsx         light/dark/system, applied before first paint
             ├── glossary.ts       27 terms, English term + localised explanation
             ├── format.ts         locale-aware number/price/R formatting
             ├── home.ts           Home-screen derivation
+            ├── signal.ts         Signal-screen derivation
             └── setup.ts          setup-detail derivation
 ```
 
@@ -165,8 +179,9 @@ pnpm install
 # 2. (optional) configure
 cp .env.example .env.local
 #    Everything is optional. With an empty file the app still runs:
-#    crypto is LIVE from Binance, metals/FX are clearly labelled DEMO,
-#    explanations come from the deterministic engine, data lives in localStorage.
+#    crypto is LIVE from Binance and FX is LIVE from Yahoo — neither needs a key —
+#    gold is clearly labelled DEMO, explanations come from the deterministic
+#    engine, and data lives in localStorage.
 
 # 3. run
 pnpm dev                     # http://localhost:3000
@@ -185,7 +200,7 @@ Other scripts:
 
 ```bash
 pnpm typecheck     # tsc -p tsconfig.check.json --noEmit  (whole monorepo, strict)
-pnpm test          # engine, scoring, ai-schema and mock-provider suites
+pnpm test          # engine, scoring, ai-schema, market-data, news, theme, auth, i18n
 pnpm build         # production build (Turbopack)
 pnpm start         # serve the production build
 pnpm lint          # eslint, flat config (Next 16 removed `next lint`)
@@ -199,6 +214,14 @@ happen in an effect because it does not exist during SSR. The compiler itself is
 rules are advice about a refactor rather than about a bug. They are warnings rather than
 silenced so the debt stays visible.
 
+The same commands run without you. `.github/workflows/ci.yml` runs `verify` → `build` →
+`lint` on every push and pull request to `main`, with no secrets passed to it, so a build
+that only succeeds because a key happened to be set fails there. That gives you a red cross
+on GitHub but does not stop a deployment — Vercel builds whatever is pushed. The block is
+`apps/web/vercel.json`, whose build command is `pnpm -w run verify && next build`: a failing
+test fails the build, and a failed build is never promoted, so the previous deployment stays
+live. `docs/DEPLOY.md` §7 explains both layers and how to override them temporarily.
+
 On a phone: `pnpm dev` prints a LAN URL (e.g. `http://192.168.1.40:3000`) — open that on the
 handset while on the same Wi-Fi. The UI was designed at phone width first.
 
@@ -208,13 +231,24 @@ handset while on the same Wi-Fi. The UI was designed at phone width first.
 # with the Supabase CLI, against a linked project
 supabase db push
 
-# or: open the SQL editor of a new Supabase project and paste
+# or: open the SQL editor of a new Supabase project and paste, in order,
 #     supabase/migrations/0001_init.sql
+#     supabase/migrations/0002_auth_profile.sql
 ```
 
 Then put `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` and
-`SUPABASE_SERVICE_ROLE_KEY` in `.env.local`. Until you do, the app uses localStorage and
-says so on the Settings screen rather than pretending to be persistent.
+`SUPABASE_SERVICE_ROLE_KEY` in `.env.local`.
+
+**What the database is used for today is accounts, and only accounts.** Sign-up, sign-in and
+the profile rows the trigger provisions. Journal entries, settings, rules and positions are
+still written to `localStorage` by `lib/store.ts` whether or not a database is connected — so
+signing in on a second device does not bring your data with it. The Settings screen says this
+in those words rather than showing "Supabase" because the keys happen to be set.
+
+Accounts are **username and password, with no email**. `lib/supabase.ts` maps a username onto
+a synthetic `<username>@traderzaza.invalid` address because Supabase requires an address;
+the mapping is lossless and round-trip tested. The consequence is worth stating plainly:
+**there is no password reset**, because there is no address to send one to.
 
 ---
 
@@ -224,16 +258,17 @@ says so on the Settings screen rather than pretending to be persistent.
 |---|---|---|---|
 | `ANTHROPIC_API_KEY` | no | — | Prose comes from the deterministic `LocalExplainer`. **All numbers identical**, wording stiffer. UI labels the source. |
 | `ANTHROPIC_MODEL` | no | app default | — |
-| `TWELVE_DATA_API_KEY` | no | — | XAUUSD / EURUSD / GBPUSD / USDJPY fall back to the mock provider and are labelled **DEMO** everywhere. |
+| `TWELVE_DATA_API_KEY` | no | — | **Metals only now that Yahoo covers FX.** Without it XAUUSD falls back to the mock provider and is labelled **DEMO** everywhere. |
 | `ENABLE_BINANCE` | no | `true` | `false` sends BTCUSDT / ETHUSDT to DEMO too. No key needed when true. |
+| `ENABLE_YAHOO` | no | `true` | `false` hands EURUSD / GBPUSD / USDJPY back to TwelveData, or to DEMO without a key. A switch rather than a key, because there is no key to remove if Yahoo ever starts refusing the host. |
 | `FORCE_DEMO_DATA` | no | `false` | `true` forces every symbol to DEMO — demos, offline work, saving quota. |
 | `CANDLE_LIMIT` | no | `400` | Candles requested per timeframe. Structure detection wants ≥ 200. |
 | `ENABLE_NEWS` | no | `true` | `false` sends the whole news feature to the seeded demo calendar. Needs no key when true. |
 | `ENABLE_INVESTING_CALENDAR` | no | `false` | Opt-in third source. Leave off on Vercel — see §9.3. |
 | `NEWS_TTL_SECONDS` | no | `900` | Calendar cache. The reaction study caches far longer, because past candles do not change. |
-| `NEXT_PUBLIC_SUPABASE_URL` | no | — | Storage falls back to localStorage. |
+| `NEXT_PUBLIC_SUPABASE_URL` | no | — | No accounts: the sign-in and sign-up screens say so instead of failing on submit. Trading data is in localStorage either way. |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | no | — | Same. RLS is what protects data, so this key is public by design. |
-| `SUPABASE_SERVICE_ROLE_KEY` | no | — | Server-only. Bypasses RLS. Never prefix with `NEXT_PUBLIC_`. |
+| `SUPABASE_SERVICE_ROLE_KEY` | no | — | Server-only, used by `POST /api/auth/signup`. Bypasses RLS. Never prefix with `NEXT_PUBLIC_`. |
 
 Keys are read **only** in `apps/web/src/lib/env.ts`, which is server-only and is never
 imported from a `"use client"` module. The browser learns about configuration exclusively
@@ -348,12 +383,16 @@ What the browser is allowed to know about the server.
 
 ```json
 {
-  "capabilities": { "llm": false, "database": false, "liveCrypto": true, "liveForex": false, "forcedDemo": false, "news": true },
+  "capabilities": { "llm": false, "database": true, "liveCrypto": true, "liveForex": true, "liveMetals": false, "forcedDemo": false, "news": true },
   "candleLimit": 400,
   "aiModel": null,
-  "providers": [{ "symbol": "XAUUSD", "display": "Gold", "assetClass": "metal", "provider": "mock", "quality": "DEMO" }]
+  "providers": [{ "symbol": "XAUUSD", "display": "Gold / USD", "assetClass": "metal", "provider": "mock", "quality": "DEMO" }]
 }
 ```
+
+`liveForex` and `liveMetals` are separate booleans because they stopped having the same
+answer: FX is live and keyless through Yahoo, while gold still needs a metals feed. One
+combined flag would have had to lie about one of them.
 
 ### `POST /api/ai/analyze`
 
@@ -382,6 +421,24 @@ current engine read rather than in chat history.
 `trades` carries the local journal with the question, which is how the coach is allowed to
 make behavioural observations: **no psychological claim without journal evidence.** Returns
 `{ content, source, provider, intent, setupId }`.
+
+### `POST /api/auth/signup`
+
+```json
+{ "username": "nick", "password": "..." }
+```
+
+Returns `{ ok: true }`, or `{ ok: false, code, detail?, fallback? }`. Sign-in and sign-out go
+straight from the browser to Supabase; only sign-up needs a server route, because accounts
+have no real address. If the project has *Confirm email* switched on, an ordinary signup
+creates an unusable account — Supabase withholds the session until a link is clicked and
+that link is sent to a domain that cannot exist. This route uses the admin endpoint with
+`email_confirm: true`, which marks the address confirmed without sending anything.
+
+The service-role key never leaves the module, and the response carries a status code and
+nothing else — no token, no user record. When the key is absent the route answers
+`needsConfirmation` with `fallback: true`, which tells the client to try signing up directly
+instead; that works on a project with confirmation disabled.
 
 ---
 
@@ -470,8 +527,25 @@ is never hidden behind three LIVE ones. The app never calls an HTTP trading API 
 | Symbols | Provider | Key? | Quality |
 |---|---|---|---|
 | BTCUSDT, ETHUSDT | `binance` — public REST `/api/v3/klines` | no | **LIVE** |
-| XAUUSD, EURUSD, GBPUSD, USDJPY | `twelvedata` | yes | **DELAYED** on the free tier, with the note *"re-check levels against your broker feed before executing"* attached to every response. Constructible as `LIVE` for a paid tier. |
+| EURUSD, GBPUSD, USDJPY | `yahoo` — public REST `v8/finance/chart` | no | **LIVE** |
+| XAUUSD | `twelvedata` | yes | **DELAYED** on the free tier, with the note *"re-check levels against your broker feed before executing"* attached to every response. Constructible as `LIVE` for a paid tier. |
 | anything, when no keyed provider matches | `mock` — seeded mulberry32 | no | **DEMO** |
+
+Yahoo sits **ahead of** TwelveData in the priority list on purpose: it is realtime and needs
+no key, where the TwelveData free tier is delayed. It declares `supports()` false for XAUUSD,
+so gold still routes to a metals feed rather than being quietly dropped.
+
+Three things about that feed are measured facts rather than assumptions, and the provider is
+built around them:
+
+- **There is no 4h interval**, so 4h bars are folded from 1h into UTC-aligned buckets.
+- **The live quote arrives as an extra row stamped "now"**, not at its bar's open time. Every
+  row is snapped to `floor(time / targetSeconds) * targetSeconds` and merged into the bucket
+  it belongs to — one code path that handles the live row and the 4h aggregation together.
+  Daily bars are exempt, because Yahoo stamps FX dailies at 23:00 UTC and snapping would
+  redate every one of them.
+- **FX volume is always 0.** Checked against the engine rather than assumed: the volume
+  signal is guarded by `avgVolume > 0`, so it goes quiet instead of misfiring.
 
 The mock provider is deterministic (seeded per symbol+timeframe), so demo charts are stable
 between reloads, produce genuine structure and zones, and the engine can be tested without a
@@ -495,15 +569,21 @@ pnpm test        # all suites
 pnpm verify      # typecheck + all suites   ← the gate
 ```
 
-**100 assertions across 5 suites, all passing.** No network, no API keys, fully deterministic.
+**147 assertions across 11 suites, all passing.** No network, no API keys, fully deterministic.
 
 | Suite | Count | Covers |
 |---|---|---|
-| `packages/engine/src/engine.test.ts` | 28 | ATR never zero even on a flat series · candle body metrics · swings alternate and are labelled · an uptrend really produces HH/HL · BOS detection · zones carry scores, freshness and bounded geometry · fresh zones outscore invalidated ones · zone distance is 0 inside the zone · `analyze` never returns an empty explanation · **demo data is reported as DEMO, never LIVE** · **insufficient history is refused rather than guessed** · plans expose best price, safer price and a structural stop · **re-entry into the same zone is refused** · sizing in lots for FX and units for crypto · the calculator warns instead of silently accepting a bad stop · **break-even requires 1R plus a new protected swing** · MFE/MAE measured from post-entry candles · expectancy / profit factor / drawdown · **replay never reveals candles beyond the cursor** · **a practice call is settled against the candles that actually followed it** — whichever of the stop and the target price reached first, with the exit price, exit time, bars held, MFE/MAE and the result in R all returned, never a bare "correct" · **a candle that contains both the stop and the target resolves to the stop and is flagged `ambiguous`**, because candles carry no tick sequence and the flattering read would be a guess |
+| `packages/engine/src/engine.test.ts` | 33 | ATR never zero even on a flat series · candle body metrics · swings alternate and are labelled · an uptrend really produces HH/HL · BOS detection · zones carry scores, freshness and bounded geometry · fresh zones outscore invalidated ones · zone distance is 0 inside the zone · `analyze` never returns an empty explanation · **demo data is reported as DEMO, never LIVE** · **insufficient history is refused rather than guessed** · plans expose best price, safer price and a structural stop · **re-entry into the same zone is refused** · sizing in lots for FX and units for crypto · the calculator warns instead of silently accepting a bad stop · **a size below the broker's minimum lot is refused with a reason, never rounded into one** — the comparison happens before rounding, because at two decimals an exact 0.0076 became a tradable 0.01 (a third more risk than asked for) and an exact 0.002 became 0.00 with no warning at all, and the refusal is asserted to carry the number that decides what to do next (what the smallest tradable lot would actually cost, as a figure and as a share of the balance) rather than only "too wide for this account" · **every phrase interpolates the same variables in both locales** — the engine catalogue has no fallback, so a `{minLotRisk}` misspelt in Thai renders literal braces and the number the sentence exists for never appears · **break-even requires 1R plus a new protected swing** · MFE/MAE measured from post-entry candles · expectancy / profit factor / drawdown · **replay never reveals candles beyond the cursor** · **a practice call is settled against the candles that actually followed it** — whichever of the stop and the target price reached first, with the exit price, exit time, bars held, MFE/MAE and the result in R all returned, never a bare "correct" · **a candle that contains both the stop and the target resolves to the stop and is flagged `ambiguous`**, because candles carry no tick sequence and the flattering read would be a guess |
 | `packages/engine/src/scoring.test.ts` | 15 | **component weights sum to exactly 1** · aligned trend-pullback grades above a conflicted one · counter-trend is penalised on the HTF component · no zone ⇒ zero zone component · grade boundaries are stable · **quality and confidence are independent scores** · live data with the full MTF chain raises confidence · trend agreement is 0 for opposing legs · a loss with no linked setup is an *emotional trade*, not a *valid loss* · a widened stop is flagged `moved_stop` · a winner that ran to 1.5R and closed flat is flagged early-BE · **revenge trading needs evidence of the sequence, not a guess** · **an empty journal produces no behaviour claims** · alerts only fire on meaningful change |
-| `packages/ai/src/schema.test.ts` | 17 | the structured contract matches spec · out-of-range scores rejected · JSON wrapped in prose or code fences still parses · **malformed output is rejected, not patched** · guaranteed-outcome language blocked in *both* languages · **engine numbers always overwrite model numbers** · the deterministic explainer is schema-valid in both languages · **Thai output is actually Thai** (regex-checked per field) and English never leaks Thai · Thai labels keep the technical term in English · the prompt hands over facts and forbids inventing numbers · **the chat prompt forbids psychology claims when the journal is empty** · teach-me walks the trader's own 10-step process · **no API key falls back to the deterministic explainer, not a fake LLM** · chat refuses to discuss a chart when none is loaded |
+| `packages/ai/src/schema.test.ts` | 20 | the structured contract matches spec · out-of-range scores rejected · JSON wrapped in prose or code fences still parses · **malformed output is rejected, not patched** · guaranteed-outcome language blocked in *both* languages · **engine numbers always overwrite model numbers** · the deterministic explainer is schema-valid in both languages · **Thai output is actually Thai** (regex-checked per field) and English never leaks Thai · Thai labels keep the technical term in English · the prompt hands over facts and forbids inventing numbers · **the chat prompt forbids psychology claims when the journal is empty** · teach-me walks the trader's own 10-step process · **no API key falls back to the deterministic explainer, not a fake LLM** · chat refuses to discuss a chart when none is loaded |
 | `packages/news/src/news.test.ts` | 28 | a pair's own two currencies outrank everything else · gold and crypto are tied to USD even though their base is not a currency · irrelevant currencies and holidays filtered out · **a high-impact release minutes away is a blackout, not a suggestion** · the blackout still holds just after the print · hours away is caution, not blackout · **a missing calendar reports `noData` instead of a false all-clear** · the study measures the candle containing the release against the one before · **releases outside the candle coverage are skipped, never approximated** · an in-line print is excluded because it is not a surprise · a consistent reaction is reported with its direction and sample count · **a split reaction is called `mixed` rather than forced into a direction** · **too few samples is `unknown`, not a weak tendency** · the median ignores a single extreme release · TradingView rows keep the source's own impact rating and UTC time · **an inverted series is judged for the currency, not by the raw number** (jobless claims falling is `better`) · history keeps only the asked-for series and the comparable prints · **the ForexFactory feed gives impact strength but never invents an `actual`** · **the service names whichever source actually answered** · the demo calendar labels every row synthetic · a failed scrape falls back to demo and explains why · the service caches instead of hammering the source · **every provider failing returns emptiness, not invented rows** · **a market that simply does not react is `unknown`, not `mixed`** · an unknown event id has no synthetic history |
-| `packages/market-data/src/mock.test.ts` | 12 | the catalogue covers all six required markets · crypto has no pip-value-per-lot, FX does · candles ordered, timeframe-aligned and internally consistent · **the generator is deterministic for the same symbol+timeframe** · prices stay in a plausible band per instrument · a custom seed reproduces a replay exactly · **provider support is declared honestly** · priority puts live feeds first and demo last · routing per symbol · **the mock provider always labels its data DEMO** · **a failing live feed degrades to DEMO and says why** · the MTF loader reports the weakest quality in the chain |
+| `packages/market-data/src/mock.test.ts` | 16 | the catalogue covers all six required markets · crypto has no pip-value-per-lot, FX does · candles ordered, timeframe-aligned and internally consistent · **the generator is deterministic for the same symbol+timeframe** · prices stay in a plausible band per instrument · a custom seed reproduces a replay exactly · **provider support is declared honestly** · priority puts live feeds first and demo last · routing per symbol, including **FX must not need a key** · **the Yahoo live quote is folded into the bar it belongs to** · **a live quote with no completed bar yet still lands on its bucket** (the regression that produced 302-second spacing on USDJPY) · 1h bars aggregate into UTC-aligned 4h bars · **Yahoo daily bars keep the exchange's own date** rather than being redated by the snap · **the mock provider always labels its data DEMO** · **a failing live feed degrades to DEMO and says why** · the MTF loader reports the weakest quality in the chain |
+| `packages/market-data/src/quota.test.ts` | 11 | **one watchlist scan costs half the per-minute allowance** — the arithmetic (4 timeframes × 1 credit against 8/min) is pinned as an assertion so growing `MTF_CHAIN` fails the build instead of silently breaking the feed · the budget refuses the credit that would exceed the minute and recovers on a *rolling* window, not a fixed boundary · the daily cap stops spending even when the minute is clear, and a new UTC day restores it · **an exhausted budget fails without spending a request** (`fetch` is stubbed to assert zero calls — a 429 learned from the far end has already cost the round trip) · a second read inside the TTL never reaches the provider, and does again once it expires · **a failing feed serves the last real candles, not demo ones**, downgraded to DELAYED and carrying the reason and the age · with nothing cached a failure still draws a chart, labelled DEMO · **a demo fallback is never written to the cache**, so recovery is immediate rather than pinned for a whole TTL · **a DEMO success never becomes the stale-real fallback** — otherwise synthetic prices get served under a note promising "the last real candles" · the cache lifetime scales with the bar within a floor and ceiling · a windowed request is a different series and must not collide with the live one |
+| `packages/market-data/src/twelvedata.test.ts` | 4 | **every request pins `timezone=UTC`, not just the historical slices** · a returned row is read as the instant it names · **no candle is ever dated into the future**. TwelveData's datetimes are naive in both directions, and unset, `timezone` governs the `start_date` it reads *and* the `datetime` it writes while `exchange_timezone` comes back null — so nothing announces which clock is in use. The parameter was sent only on sliced requests, so historical windows were right and every chart and watchlist scan was wrong: XAU/USD's exchange sits at UTC+11 under southern-hemisphere DST, so gold arrived stamped eleven hours in the future, with prices correct to the cent. A newest bar dated tomorrow, a "last update" counting backwards, and a staleness check measuring now against a future time. The stand-in feed here answers with the exchange-local label when the timezone is unpinned, because one that replied identically either way could not fail |
+| `apps/web/src/app/theme.test.ts` | 6 | both themes define exactly the same tokens · **every text token is readable on every surface it is drawn on**, measured as contrast against globals.css itself rather than against a copy of the palette · non-text tokens keep their meaning · chart marks stand out from the chart background, which matches the page it is embedded in |
+| `apps/web/src/lib/supabase.test.ts` | 6 | **the username ⇄ synthetic-address round trip is lossless** for every name the rules allow · the same name always produces the same address however it was typed · the login field accepts either form · normalising is idempotent · **usernames are rejected for a named reason**, not just rejected |
+| `apps/web/src/lib/signal.test.ts` | 4 | **`measured` counts the markets that answered, not the markets that were asked** · a scan where every market failed measured nothing, and reports no blocked markets either — a market that never loaded was not *blocked*, it was *absent* · **an empty scan is never badged as live data** · every scanning screen still carries the branch that tells the two kinds of nothing apart |
+| `apps/web/src/i18n/dictionaries.test.ts` | 4 | **every namespace defines exactly the same keys in both locales** · no translation is blank · **a key interpolates the same `{{variables}}` in both locales** · the guide renders every bullet its translations define. `translate()` falls back to the other locale before falling back to the key, which is right at runtime but means a missing Thai string renders as English and nobody notices — so parity is asserted rather than maintained by hand |
 
 The bolded cases are the honesty invariants. They are the tests that would catch the product
 quietly lying — presenting demo data as live, patching malformed model output into something
@@ -520,12 +600,16 @@ off-by-one bugs in a structure engine actually live.
 
 Stated plainly, because the whole point of the product is not overstating what it knows.
 
-1. **Metals and FX are DEMO without `TWELVE_DATA_API_KEY`, and DELAYED with a free one.**
-   Crypto is genuinely LIVE from Binance with no key at all. Delayed and demo data are
-   labelled as such on every chart, every setup card, every scanner row and in the AI's own
-   preamble — never silently. Zones and structure barely move on a few seconds of delay, so
-   planning on DELAYED data is fine; executing on it is not, which is what your broker's
-   chart is for.
+1. **Gold is the only market still on demo data.** Crypto is LIVE from Binance and FX is LIVE
+   from Yahoo, both keyless. XAUUSD needs `TWELVE_DATA_API_KEY` and is labelled **DEMO**
+   until it has one — on every chart, every setup card, every scanner row and in the AI's own
+   preamble, never silently. With a free key it becomes DELAYED. Zones and structure barely
+   move on a few seconds of delay, so planning on DELAYED data is fine; executing on it is
+   not, which is what your broker's chart is for. That free key is also **metered** — 8
+   credits a minute and 800 a day, against four per gold scan — so the cache and the credit
+   budget described in §11 are what keep it inside the allowance. Left running continuously
+   on every timeframe, gold alone would want roughly 70 credits an hour, which fits a trading
+   session comfortably and a 24-hour unattended dashboard not at all.
 2. **Polling, not WebSocket.** Prices can lag your broker slightly. There is no tick data,
    so intra-candle sequencing (did the high or the low come first?) is unknown — the engine
    does not pretend otherwise, and the replay trainer flags the ambiguous candles rather
@@ -555,8 +639,11 @@ Stated plainly, because the whole point of the product is not overstating what i
    your own platform and record it here.
 7. **Without `ANTHROPIC_API_KEY` the prose is deterministic.** Identical numbers, stiffer
    language, no free-form conversation depth.
-8. **Without Supabase, everything lives in this browser.** Clearing site data deletes the
-   journal. Export from Settings before you do.
+8. **Trading data lives in this browser, with or without Supabase.** The database is wired up
+   and used for accounts, but `lib/store.ts` still writes the journal, settings, rules and
+   positions to `localStorage` — so signing in on a second device does not bring them across,
+   and clearing site data deletes them. Settings has an export button; there is no import
+   button yet, so the file is a copy rather than a restore path.
 9. **AI accuracy tracking is scaffolded, not populated.** Per-grade calibration ("setups the
    AI graded A resolved like this") needs persisted history, so the Coach screen says
    "not enough samples" instead of showing a flattering number.
@@ -568,8 +655,12 @@ Stated plainly, because the whole point of the product is not overstating what i
 11. **Journal statistics are honest about thin samples.** Below 20 trades the app shows the
     numbers but flags them as not yet meaningful, and undefined ratios render as `—` rather
     than `0`.
-12. **No auth UI yet.** The SQL has RLS, `auth.uid()` policies and a signup trigger ready, but
-    the app currently runs single-user and local.
+12. **Accounts exist, but they do not own anything yet.** Sign-up, sign-in and sign-out work,
+    the trigger provisions the profile rows, and RLS and `auth.uid()` policies are in place —
+    but no screen reads from or writes to those tables, so being signed in changes nothing
+    except the name in the top bar. Signing in is therefore optional and nothing is gated
+    behind it. Accounts are username-only by request, which means **no password reset**:
+    there is no address to send one to.
 13. **Six symbols, one timeframe chain.** The architecture is asset-class agnostic; the
     watchlist and the mandatory 4H→1H→15M→5M chain are not.
 
@@ -579,29 +670,40 @@ Stated plainly, because the whole point of the product is not overstating what i
 
 **P0 — make the data durable**
 1. Wire the Supabase client behind the existing `lib/store.ts` interface so journal, rules,
-   settings and positions persist across devices. The schema is already written; this is
-   adapter work, not design work.
-2. Email auth + the signup trigger that is already in the migration.
+   settings and positions persist across devices. The schema is already written and so is the
+   auth that would key it; this is adapter work, not design work. It is the one change that
+   would make signing in mean something.
+2. Import to match the existing export, so a backup file is a restore path and not just a
+   copy.
 3. Persist `setups` and `setup_events` as they are produced. This single change unlocks
    alerts-on-change (§20), real AI accuracy tracking and genuine backtests, because all three
    need history that currently evaporates on reload.
 
 **P1 — close the honesty gaps**
-4. WebSocket streaming for Binance, then for the FX provider, with the LIVE badge upgraded to
-   show staleness in seconds.
-5. Populate `ai_accuracy` and show real per-grade calibration on the Coach screen, including
+4. ~~A real gold feed~~ — **done**: TwelveData covers XAUUSD at DELAYED on the free tier,
+   cached and credit-budgeted per §11, and verified against the live API. PAXG/XAUT were
+   measured and rejected first, because they trade through the weekend and would invent
+   candles that do not exist in the gold market the trader's broker shows. What remains is
+   the *realtime* half: the free tier is delayed, and the only free realtime metal prices
+   found are Yahoo's COMEX futures (`GC=F`, `SI=F`), which sit roughly $18 above spot — 180
+   pips on an entry level, so they are a different instrument rather than a cheaper feed and
+   would have to be labelled as one, not substituted silently.
+5. WebSocket streaming for Binance, then for the FX provider, with the LIVE badge upgraded to
+   show staleness in seconds. Both feeds are polled today; `subscribe()` exists on the
+   provider interface and returns `null` for every implementation.
+6. Populate `ai_accuracy` and show real per-grade calibration on the Coach screen, including
    the cases where the AI was wrong.
-6. Persist the reaction studies so the release history is not re-measured per cold start, and
+7. Persist the reaction studies so the release history is not re-measured per cold start, and
    widen the sample cap past 10 once the data tier allows it.
 
 **P2 — deepen the coaching**
-7. Push notifications for the alert engine (the `notifications` table already stores the
+8. Push notifications for the alert engine (the `notifications` table already stores the
    `trigger` jsonb that proves which state change justified sending).
-8. Screenshot upload on journal entries (`trade_screenshots` is ready) so the replay/review
+9. Screenshot upload on journal entries (`trade_screenshots` is ready) so the replay/review
    loop can compare the chart you saw against the chart that happened.
-9. Turn replay into a real backtester: date-range sweeps, persisted `backtest_trades`, and the
-   AI review pass over the results.
-10. Expand to indices and equities, which mostly means session-aware handling of gaps and
+10. Turn replay into a real backtester: date-range sweeps, persisted `backtest_trades`, and the
+    AI review pass over the results.
+11. Expand to indices and equities, which mostly means session-aware handling of gaps and
     exchange hours in the context engine.
 
 ---
@@ -617,6 +719,27 @@ Documented because they are deviations or non-obvious trade-offs.
   the browser**, which is what makes the replay trainer genuinely interactive and genuinely
   leak-free. `ReplayController.visible()` truncates every timeframe by the replay clock and
   hands the slice straight to `analyze()` with no round-trip.
+- **Gold is cached and budgeted rather than simply fetched, because the free tier cannot
+  survive this app's own access pattern.** TwelveData's free plan allows 8 credits a minute
+  and one `time_series` call costs one, while the mandatory 4H/1H/15M/5M chain means a single
+  gold scan costs four. Four screens scan the watchlist and every one is `force-dynamic`, so
+  two page loads inside a minute spent the whole allowance and the third got a 429 — measured,
+  not predicted. Three things follow. The `MarketDataService` cache is **not an optimisation
+  but the thing that makes the tier usable at all**, with a TTL derived from the bar (a minute
+  is most of a 5M bar's life and nothing on a 4H) rather than one number for everything.
+  `CreditBudget` checks the allowance *before* building the request, because a 429 discovered
+  from the far end has already cost the round trip and, worse, arrives as a failure the cache
+  must paper over. And the fallback ladder is ordered fresh → **stale-but-real** → demo: when
+  the feed refuses, real candles from four minutes ago beat synthetic candles from this
+  instant, because the levels on them were actually traded, which is the only reason to look
+  at a chart. Demo responses are never cached, in either direction — not the fallback and not
+  a successful DEMO fetch — or one failure would pin synthetic prices for a whole TTL and the
+  stale-real branch would serve them under a note promising "the last real candles". Two
+  limits are stated rather than hidden: the count is per server process, so another instance
+  sharing the key is invisible to it, and the daily reset assumes UTC. Neither breaks
+  correctness, because a real 429 still degrades gracefully; this is a budget that avoids the
+  common case, not a distributed quota manager. The remaining credits are shown in Settings,
+  since "gold went DEMO" is a symptom and "7 of 8 spent this minute" is the cause.
 - **Thai is the default locale**, and Thai copy is written the way a trader speaks, not the
   way a textbook translates. Technical terms stay in English (BOS, CHoCH, Supply Zone) with a
   Thai explanation attached, because that is how Thai traders actually say them.
@@ -624,6 +747,36 @@ Documented because they are deviations or non-obvious trade-offs.
   credentials exist, so persistence lives behind a hook interface (`useSettings`,
   `useJournal`, `useRules`) with a localStorage implementation today and a Supabase one
   dropped in later without touching a single component.
+- **Accounts are a username and a password, with no email.** The brief assumed email auth;
+  this is for the author and one or two friends, and an email round trip with no password
+  reset at the end of it is ceremony rather than security. Supabase requires an address, so
+  `lib/supabase.ts` maps the username onto `<username>@traderzaza.invalid` — a reserved TLD
+  that cannot resolve, so a confirmation mail can never be sent anywhere real. The round trip
+  is lossless and tested, the login field takes either form, and `/api/auth/signup` creates
+  the account pre-confirmed so the synthetic address is never put in the critical path. The
+  cost is stated rather than hidden: a forgotten password cannot be recovered, and both the
+  sign-up screen and the in-app guide say so.
+- **"No signal" and "no data" are two different components, not one with a flag.** Both end
+  up as an empty list, and on a trading screen they mean opposite things: the first says
+  *stay out, that is the answer*, the second says *you are looking at nothing, do not
+  conclude anything*. `Empty` is the result and `FeedFailure` is the absence; the scanning
+  screens pick between them on `measured`, the count of markets that actually answered. Three
+  consequences follow. A failed feed is reported **above** the results rather than in a
+  footnote under them, because it is context you need before you read a ranking. When nothing
+  was measured, the "nothing qualifies" line is **withheld entirely** rather than restyled —
+  an unlabelled market cannot be described as quiet. And the notice is amber with `⚠` rather
+  than the red it started as, because in this UI red already means *short*, and a feed that
+  timed out is a statement about the data, not about direction.
+- **The privacy disclosure is driven by the capability flag, not written as a constant.**
+  "Storage mode: this device only" is true of persistence and silent about transmission, and
+  the gap between those two is the whole privacy question here: §68 requires journal evidence
+  before the coach may say anything about the trader's habits, so `coach/page.tsx` sends the
+  journal with every question, and with a key configured `chatSystemPrompt` puts the recent
+  rows in the prompt to Anthropic. Nothing in the UI said so. The "Your data" card now states
+  what leaves the device, and the AI line reads from `capabilities.llm` rather than being
+  typed out, because the two cases are opposite claims — *your journal goes to Anthropic* and
+  *no AI provider sees it* — and a hardcoded string would be a lie in one of them. It sits
+  next to the storage-mode row it qualifies rather than in a policy page nobody opens.
 - **`psychology_logs.evidence` is `NOT NULL` in SQL.** The rule "never make a psychological
   claim without journal evidence" is enforced by the schema, not by prompt discipline.
 - **Invalidated setups are updated, never deleted.** `setups.invalidated_at` plus

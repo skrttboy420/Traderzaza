@@ -4,16 +4,22 @@ import { useState } from "react";
 import type { NewsImpact } from "@atc/news";
 
 import { NewsPanel } from "@/components/NewsPanel";
+import type { NewsDay } from "@/components/NewsPanel";
 import { TopBar } from "@/components/TopBar";
 import { Disclaimer, SectionTitle, cx } from "@/components/ui";
 import { useT } from "@/i18n/provider";
 
 const IMPACT_CHOICES: NewsImpact[] = [1, 2, 3];
+const DAY_CHOICES: NewsDay[] = ["yesterday", "today", "tomorrow", "all"];
 
 /**
- * The calendar page. Two controls only — which market, and how weak a release
- * is still worth showing — because the point of the screen is the rows, not
- * the filtering.
+ * The calendar page. Three controls — which market, which day, and how weak a
+ * release is still worth showing — because the point of the screen is the
+ * rows, not the filtering.
+ *
+ * "Today" is the default because the common question is what is about to move
+ * this market, not what is scheduled all week. "All" keeps the week in reach,
+ * since a trader planning Friday's session on Wednesday needs it.
  *
  * The "how to read this" card is first on purpose. The user's complaint about
  * other screens was that they showed a verdict without the reasoning behind
@@ -25,6 +31,7 @@ export function NewsView({ symbols }: { symbols: string[] }) {
   const tc = useT("common");
   const [symbol, setSymbol] = useState(symbols[0] ?? "XAUUSD");
   const [minImpact, setMinImpact] = useState<NewsImpact>(2);
+  const [day, setDay] = useState<NewsDay>("today");
 
   return (
     <>
@@ -72,6 +79,28 @@ export function NewsView({ symbols }: { symbols: string[] }) {
           </div>
 
           <div className="mt-4 text-[11px] uppercase tracking-wide text-[var(--color-faint)]">
+            {t("dayLabel")}
+          </div>
+          <div className="scroll-x mt-2 flex gap-2">
+            {DAY_CHOICES.map((choice) => (
+              <button
+                key={choice}
+                type="button"
+                onClick={() => setDay(choice)}
+                aria-pressed={choice === day}
+                className={cx(
+                  "shrink-0 rounded-lg border px-3 py-1.5 text-[12.5px] font-medium",
+                  choice === day
+                    ? "border-[var(--color-limit)] bg-[var(--color-surface-3)] text-[var(--color-text)]"
+                    : "border-[var(--color-border)] text-[var(--color-muted)]",
+                )}
+              >
+                {t(`day.${choice}`)}
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-4 text-[11px] uppercase tracking-wide text-[var(--color-faint)]">
             {t("filterLabel")}
           </div>
           <div className="mt-2 flex gap-2">
@@ -98,8 +127,10 @@ export function NewsView({ symbols }: { symbols: string[] }) {
         </section>
 
         {/* Remounted per symbol/filter so the panel refetches cleanly instead
-            of showing one market's rows under another's heading. */}
-        <NewsPanel key={`${symbol}:${minImpact}`} symbol={symbol} minImpact={minImpact} />
+            of showing one market's rows under another's heading. The day is
+            deliberately not in the key: it filters rows the panel already has,
+            so switching days costs no request. */}
+        <NewsPanel key={`${symbol}:${minImpact}`} symbol={symbol} minImpact={minImpact} day={day} />
 
         <Disclaimer text={tc("disclaimer")} />
       </main>

@@ -62,6 +62,15 @@ export interface SignalData {
   weakestStatus: DataStatus;
   scannedAt: number;
   failed: { symbol: string; reason: string }[];
+  /**
+   * Markets that produced a reading at all — not the number of signals.
+   *
+   * `total === 0` has two completely different meanings depending on this:
+   * every market was examined and held back (the normal state of the system),
+   * or no market was examined (the feed is down). The page must not say the
+   * first when the second is true.
+   */
+  measured: number;
 }
 
 /** How many blockers to carry per market. Enough to be useful, not a wall. */
@@ -113,6 +122,7 @@ export function toSignalData(
     weakestStatus: weakestStatus(results.map((r) => r.dataStatus)),
     scannedAt,
     failed,
+    measured: results.length,
   };
 }
 

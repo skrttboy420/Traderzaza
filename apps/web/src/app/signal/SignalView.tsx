@@ -8,7 +8,7 @@ import { DataStatusBadge } from "@/components/DataStatusBadge";
 import { NewsRiskStrip } from "@/components/NewsPanel";
 import { SetupCard } from "@/components/SetupCard";
 import { TopBar } from "@/components/TopBar";
-import { Badge, Bullets, SectionTitle, cx } from "@/components/ui";
+import { Badge, Bullets, FeedFailure, SectionTitle, cx } from "@/components/ui";
 import { SCANNER_VISUAL } from "@/components/visual";
 import { useLocale, useT } from "@/i18n/provider";
 import { formatAgo } from "@/lib/format";
@@ -87,7 +87,16 @@ export function SignalView({ data }: { data: SignalData }) {
           ))}
         </div>
 
-        {data.total === 0 ? (
+        <FeedFailure
+          title={tc(data.measured === 0 ? "feed.noneTitle" : "feed.partialTitle")}
+          hint={tc(data.measured === 0 ? "feed.noneHint" : "feed.partialHint")}
+          failed={data.failed}
+        />
+
+        {/* "No signal" is only an answer if something was asked. With nothing
+            measured, `signal.none.body` — "nothing is broken, this is the
+            system working" — would be the exact opposite of the truth. */}
+        {data.total === 0 && data.measured > 0 ? (
           <section className="card p-5">
             <SectionTitle title={t("signal.none.title")} />
             <p className="text-[12.5px] leading-relaxed text-[var(--color-muted)]">
@@ -192,18 +201,6 @@ export function SignalView({ data }: { data: SignalData }) {
           </section>
         ) : null}
 
-        {data.failed.length > 0 ? (
-          <section className="card border-l-2 border-l-[var(--color-short)] p-4">
-            <SectionTitle title={tc("state.error")} />
-            <ul className="space-y-1">
-              {data.failed.map((f) => (
-                <li key={f.symbol} className="text-[12px] text-[var(--color-muted)]">
-                  <span className="font-medium">{f.symbol}</span>: {f.reason}
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
 
         <p className="px-1 py-4 text-center text-[11px] leading-relaxed text-[var(--color-faint)]">
           {tc("disclaimer")}

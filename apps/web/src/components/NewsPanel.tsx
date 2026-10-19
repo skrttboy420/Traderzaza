@@ -6,7 +6,7 @@ import type { NewsEvent, NewsImpact, NewsRisk, ReactionGroup, ReactionReading, R
 import type { DataStatus } from "@atc/types";
 
 import { useLocale, useT } from "@/i18n/provider";
-import { formatDuration, formatNumber, formatPercent, formatTime } from "@/lib/format";
+import { formatDayShort, formatDuration, formatNumber, formatPercent, formatTime } from "@/lib/format";
 import { Badge, Row, SectionTitle, cx } from "./ui";
 
 /**
@@ -65,6 +65,42 @@ const IMPACT_TONE: Record<NewsImpact, string> = {
   3: "text-[var(--color-short)]",
 };
 
+export type NewsDay = "yesterday" | "today" | "tomorrow" | "all";
+
+const DAY_OFFSET: Record<Exclude<NewsDay, "all">, number> = {
+  yesterday: -1,
+  today: 0,
+  tomorrow: 1,
+};
+
+/**
+ * Local midnight to local midnight, for a day relative to today, in unix
+ * seconds.
+ *
+ * The trader's own timezone, not the source's: a release at 20:30 UTC is
+ * tonight in Bangkok and this afternoon in London, and a tab labelled "today"
+ * has to mean the day the trader is living in.
+ */
+function dayBounds(offsetDays: number, now: number): { start: number; end: number } {
+  const start = new Date(now * 1000);
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() + offsetDays);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  return { start: Math.floor(start.getTime() / 1000), end: Math.floor(end.getTime() / 1000) };
+}
+
+/**
+ * Wide enough that every day tab is served by one fetch: all of yesterday in
+ * any timezone, and the working week ahead. The day filter is applied to the
+ * rows on screen, never to the request — one fetch covers all four tabs, and
+ * more importantly the blackout verdict keeps being judged against the whole
+ * window. Fetching only yesterday would return no upcoming release and so
+ * report an all-clear while a release was minutes away.
+ */
+const PANEL_PAST_HOURS = 48;
+const PANEL_LIMIT = 120;
+
 /** How often the calendar is re-fetched so the blackout verdict stays current. */
 const REFRESH_MS = 60_000;
 /** How often the countdowns tick. Cheap, and the copy is only minute-accurate. */
@@ -116,7 +152,15 @@ function ImpactStars({ impact, label }: { impact: NewsImpact; label: string }) {
   );
 }
 
-export function NewsPanel({ symbol, minImpact = 2 }: { symbol: string; minImpact?: NewsImpact }) {
+export function NewsPanel({
+  symbol,
+  minImpact = 2,
+  day = "all",
+}: {
+  symbol: string;
+  minImpact?: NewsImpact;
+  day?: NewsDay;
+}) {
   const t = useT("news");
   const { locale } = useLocale();
   const [data, setData] = useState<NewsResponse | null>(null);
@@ -127,7 +171,13 @@ export function NewsPanel({ symbol, minImpact = 2 }: { symbol: string; minImpact
   const load = useCallback(async (quiet = false) => {
     if (!quiet) setState("loading");
     try {
-      const response = await fetch(`/api/news?symbol=${encodeURIComponent(symbol)}&minImpact=${minImpact}`);
+      const query = new URLSearchParams({
+        symbol,
+        minImpact: String(minImpact),
+        past: String(PANEL_PAST_HOURS),
+        limit: String(PANEL_LIMIT),
+      });
+      const response = await fetch(`/api/news?${query.toString()}`);
       if (!response.ok) throw new Error("calendar failed");
       setData((await response.json()) as NewsResponse);
       setState("ready");
@@ -180,6 +230,12 @@ export function NewsPanel({ symbol, minImpact = 2 }: { symbol: string; minImpact
   const riskSeconds = secondsAway(risk.event?.time, risk.secondsAway, now);
   const away = riskSeconds === null ? t("now") : formatDuration(Math.abs(riskSeconds), locale);
 
+  const clock = now ?? data.fetchedAt;
+  const bounds = day === "all" ? null : dayBounds(DAY_OFFSET[day], clock);
+  const events = bounds
+    ? data.events.filter((event) => event.time >= bounds.start && event.time < bounds.end)
+    : data.events;
+
   return (
     <section className="card p-4">
       <SectionTitle
@@ -199,6 +255,19 @@ export function NewsPanel({ symbol, minImpact = 2 }: { symbol: string; minImpact
       </p>
       <p className="mt-2 text-[11px] leading-snug text-[var(--color-faint)]">{t("riskHint")}</p>
 
+      {/* Which day the rows below belong to, with its date, so the verdict
+          above is never mistaken for a verdict about that day. The badge
+          always speaks about now; this list may be speaking about yesterday. */}
+      {bounds ? (
+        <p className="mt-3 text-[11.5px] text-[var(--color-muted)]">
+          <span className="font-semibold text-[var(--color-text)]">{t(`day.${day}`)}</span>
+          {" · "}
+          {formatDayShort(bounds.start, locale)}
+          {" · "}
+          {t("dayCount", { count: events.length })}
+        </p>
+      ) : null}
+
       {data.demo ? (
         <div className="mt-3 rounded-lg border border-[var(--color-wait)]/40 bg-[var(--color-wait-soft)] p-3">
           <Badge className="border-[var(--color-wait)]/40 text-[var(--color-wait)]" glyph="⚠">
@@ -213,20 +282,22 @@ export function NewsPanel({ symbol, minImpact = 2 }: { symbol: string; minImpact
       ) : null}
 
       <ul className="mt-3 divide-y divide-[var(--color-border)]">
-        {data.events.map((event) => (
+        {events.map((event) => (
           <EventRow
             key={event.id}
             event={event}
             symbol={symbol}
-            now={now ?? data.fetchedAt}
+            now={clock}
             open={openEvent === event.id}
             onToggle={() => setOpenEvent(openEvent === event.id ? null : event.id)}
           />
         ))}
       </ul>
 
-      {data.events.length === 0 && data.provider !== "none" ? (
-        <p className="mt-3 text-[12.5px] text-[var(--color-faint)]">{t("empty")}</p>
+      {events.length === 0 && data.provider !== "none" ? (
+        <p className="mt-3 text-[12.5px] text-[var(--color-faint)]">
+          {bounds ? t("emptyDay") : t("empty")}
+        </p>
       ) : null}
 
       <p className="mt-3 border-t border-[var(--color-border)] pt-3 text-[11px] text-[var(--color-faint)]">

@@ -2,6 +2,14 @@
   "pageTitle": "Economic calendar",
   "pageSubtitle": "What is scheduled, how hard it usually hits, and what this market actually did last time",
   "pickSymbol": "Market",
+  "dayLabel": "Day",
+  "day": {
+    "yesterday": "Yesterday",
+    "today": "Today",
+    "tomorrow": "Tomorrow",
+    "all": "Whole week"
+  },
+  "dayCount": "{{count}} release(s)",
   "filterLabel": "Minimum impact",
   "filterAll": "All",
   "howTitle": "How to read this page",
@@ -13,6 +21,7 @@
   "subtitle": "Scheduled releases that can move {{symbol}}",
   "watching": "Currencies that matter here: {{list}}",
   "empty": "No scheduled release for these currencies in this window.",
+  "emptyDay": "Nothing scheduled for this market on this day. A quiet calendar is not a quiet market — price can still move without a release.",
   "loading": "Loading the calendar…",
   "failed": "The calendar could not be loaded. Price analysis is unaffected.",
   "retry": "Try again",

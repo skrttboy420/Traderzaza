@@ -24,3 +24,7 @@ next-env.d.ts
 # Vercel's local link file. Contains the project/org id, not a secret, but it
 # is machine-specific and should not be committed.
 .vercel/
+
+# Per-machine tool permissions. `.claude/launch.json` is shared config and is
+# tracked; this one records what one person allowed on one machine.
+.claude/settings.local.json

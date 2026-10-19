@@ -123,10 +123,8 @@
   },
   "storage": {
     "local": "Stored on this device only",
-    "localHint": "No database configured, so entries live in this browser. Clearing browser data deletes them.",
-    "cloud": "Synced to the database",
-    "export": "Export to file",
-    "import": "Import from file"
+    "localHint": "Entries live in this browser. Clearing browser data deletes them, and they do not follow you to another device.",
+    "export": "Export to file"
   },
   "originalLanguage": "This entry was written in {{lang}}. The system does not overwrite the original."
 }

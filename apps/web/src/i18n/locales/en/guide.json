@@ -31,9 +31,9 @@
   "data": {
     "title": "Is the chart delayed?",
     "body": "Depends on the market, and the app always tells you which case you are in. Look at the badge on every chart.",
-    "item1": "LIVE — crypto (BTCUSDT, ETHUSDT) from Binance's public feed, no API key needed. This is real-time.",
-    "item2": "DELAYED — gold and forex on a free Twelve Data key. Usable for structure and planning, but the last price can be behind your broker. Check your levels in your platform before you execute.",
-    "item3": "DEMO — synthetic data. The structure and zones are real calculations, but the prices are generated. This is what you see with no API key configured, and the badge is impossible to miss. Never trade a DEMO level.",
+    "item1": "LIVE — crypto (BTCUSDT, ETHUSDT) from Binance's public feed, and forex (EURUSD, GBPUSD, USDJPY) from Yahoo Finance. Neither needs an API key, and both are real-time.",
+    "item2": "DELAYED — gold, once a free Twelve Data key is configured. Usable for structure and planning, but the last price can be behind your broker. Check your levels in your platform before you execute.",
+    "item3": "DEMO — synthetic data. The structure and zones are real calculations, but the prices are generated. Gold is still in this state because no key is configured yet, and the badge is impossible to miss. Never trade a DEMO level.",
     "item4": "Zones and structure barely move on a few seconds of delay, so planning on delayed data is fine. Execution is not — that is what your broker's chart is for."
   },
   "risk": {
@@ -68,6 +68,15 @@
     "item1": "Price is revealed one candle at a time. You mark the structure, call your bias, and place an entry, stop and target before the next candle appears.",
     "item2": "Every practice trade is kept with the price you entered at, where your stop and target were, where the market actually went, and the result in R. Not just \"right\" or \"wrong\".",
     "item3": "Replay sessions are seeded, so you can replay the same sequence and compare how you read it the second time."
+  },
+  "account": {
+    "title": "Your account and your data",
+    "body": "The account only gives you a name. It does not yet store anything, so it is worth knowing where the things you log actually live.",
+    "item1": "Signing in is optional. Every screen works the same either way — nothing is locked behind an account.",
+    "item2": "Sign-up is a username and a password, with no email. That means there is no password reset: if you forget it, it cannot be recovered. Keep it somewhere safe.",
+    "item3": "All of your trading data — journal, positions, rules and settings — lives in this browser, not in the account. Signing in with the same name on another device will not bring it across, and signing out does not delete it.",
+    "item4": "Settings has an export button that saves a copy to a file (there is no import yet) and a clear button that cannot be undone. Clearing your browser data removes all of it too.",
+    "item5": "One thing genuinely does leave this browser: ask the coach a question and the setup on screen goes with it, along with your recent journal entries — that is what lets it say anything about your own habits. It reaches an AI provider only when an AI key is configured, and the \"Your data\" card in Settings states which of the two is happening right now."
   },
   "limits": {
     "title": "What it cannot do",

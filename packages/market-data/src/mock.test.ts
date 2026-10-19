@@ -3,6 +3,7 @@ import { ASSETS, getAsset, requireAsset } from "./assets";
 import { MockMarketDataProvider, generateCandles } from "./mock";
 import { BinanceMarketDataProvider } from "./binance";
 import { TwelveDataProvider } from "./twelvedata";
+import { YahooFinanceProvider, normaliseYahooRows } from "./yahoo";
 import { MarketDataService, createProviders } from "./service";
 import { TIMEFRAME_SECONDS } from "./types";
 
@@ -100,19 +101,27 @@ test("provider support is declared honestly", () => {
   assert.equal(keyed.supports("XAUUSD"), true);
   assert.equal(keyed.supports("BTCUSDT"), false);
   assert.equal(keyed.quality, "DELAYED");
+
+  const yahoo = new YahooFinanceProvider();
+  assert.equal(yahoo.supports("EURUSD"), true);
+  assert.equal(yahoo.supports("USDJPY"), true);
+  assert.equal(yahoo.supports("XAUUSD"), false, "Yahoo has no gold spot symbol");
+  assert.equal(yahoo.supports("BTCUSDT"), false);
+  assert.equal(yahoo.quality, "LIVE");
 });
 
 test("provider priority puts live feeds first and demo last", () => {
   const withKey = createProviders({ twelveDataApiKey: "test-key" });
   assert.deepEqual(
     withKey.map((p) => p.name),
-    ["binance", "twelvedata", "mock"],
+    ["binance", "yahoo", "twelvedata", "mock"],
+    "the realtime keyless feed must outrank the delayed keyed one",
   );
 
   const noKey = createProviders({});
   assert.deepEqual(
     noKey.map((p) => p.name),
-    ["binance", "mock"],
+    ["binance", "yahoo", "mock"],
   );
 
   const forced = createProviders({ forceDemo: true });
@@ -125,8 +134,93 @@ test("provider priority puts live feeds first and demo last", () => {
 test("the service routes each symbol to the right provider", () => {
   const service = MarketDataService.fromConfig({ twelveDataApiKey: "test-key" });
   assert.equal(service.providerFor("BTCUSDT").name, "binance");
-  assert.equal(service.providerFor("XAUUSD").name, "twelvedata");
+  assert.equal(service.providerFor("EURUSD").name, "yahoo");
+  assert.equal(service.providerFor("XAUUSD").name, "twelvedata", "gold needs a metals feed");
   assert.equal(service.providerFor("SOMETHING").name, "mock", "unknown symbols fall back to demo");
+
+  const keyless = MarketDataService.fromConfig({});
+  assert.equal(keyless.providerFor("GBPUSD").name, "yahoo", "FX must not need a key");
+  assert.equal(keyless.providerFor("XAUUSD").name, "mock");
+});
+
+test("the Yahoo live quote is folded into the bar it belongs to", () => {
+  // 17:00 is the open bar; 17:13:49 is the quote Yahoo appends stamped with
+  // "now". One 1h candle must come out of the pair, stamped 17:00.
+  const hour = 1_760_000_000 - (1_760_000_000 % 3600);
+  const rows = [
+    { time: hour - 3600, open: 1.1, high: 1.11, low: 1.09, close: 1.105, volume: 0 },
+    { time: hour, open: 1.105, high: 1.106, low: 1.104, close: 1.1055, volume: 0 },
+    { time: hour + 829, open: 1.108, high: 1.112, low: 1.1, close: 1.111, volume: 0 },
+  ];
+  const out = normaliseYahooRows(rows, 3600, 400);
+  assert.equal(out.length, 2, "the unaligned live row must not become its own candle");
+  const last = out[1];
+  assert.ok(last);
+  assert.equal(last.time, hour, "the candle keeps the bar's open time");
+  assert.equal(last.open, 1.105, "open comes from the bar");
+  assert.equal(last.close, 1.111, "close comes from the live quote");
+  assert.equal(last.high, 1.112, "the live quote can extend the high");
+  assert.equal(last.low, 1.1, "the live quote can extend the low");
+});
+
+test("a live quote with no completed bar yet still lands on the bucket", () => {
+  // Seen on USDJPY 5m: the bucket's own bar had not been published, so the
+  // quote was the only row for it. Snapping is what keeps the spacing even.
+  const bucket = 1_760_000_000 - (1_760_000_000 % 300);
+  const rows = [
+    { time: bucket - 300, open: 158.4, high: 158.5, low: 158.3, close: 158.45, volume: 0 },
+    { time: bucket + 2, open: 158.45, high: 158.52, low: 158.44, close: 158.51, volume: 0 },
+  ];
+  const out = normaliseYahooRows(rows, 300, 400);
+  assert.equal(out.length, 2);
+  const first = out[0];
+  const second = out[1];
+  assert.ok(first && second);
+  assert.equal(second.time - first.time, 300, "candles must stay evenly spaced");
+  assert.equal(second.close, 158.51);
+});
+
+test("Yahoo 1h bars aggregate into UTC-aligned 4h bars", () => {
+  const start = 1_760_000_000 - (1_760_000_000 % 14400);
+  const rows = Array.from({ length: 8 }, (_, i) => ({
+    time: start + i * 3600,
+    open: 100 + i,
+    high: 100 + i + 2,
+    low: 100 + i - 2,
+    close: 100 + i + 1,
+    volume: 10,
+  }));
+
+  const out = normaliseYahooRows(rows, 14400, 400);
+  assert.equal(out.length, 2, "eight 1h bars make two 4h bars");
+  const first = out[0];
+  assert.ok(first);
+  assert.equal(first.time % 14400, 0, "4h buckets must align to the UTC epoch");
+  assert.equal(first.open, 100, "open comes from the first hour");
+  assert.equal(first.close, 104, "close comes from the last hour");
+  assert.equal(first.high, 105, "high is the max across the bucket");
+  assert.equal(first.low, 98, "low is the min across the bucket");
+  assert.equal(first.volume, 40, "volume sums across the bucket");
+
+  const trimmed = normaliseYahooRows(rows, 14400, 1);
+  assert.equal(trimmed.length, 1, "the series is trimmed to the requested limit");
+  assert.equal(trimmed[0]?.time, start + 14400, "trimming keeps the newest candles");
+});
+
+test("Yahoo daily bars keep the exchange's own date", () => {
+  // FX dailies are stamped at London midnight (23:00 UTC in summer). Snapping
+  // those to a UTC day would move every bar back a day.
+  const londonMidnight = 1_760_000_000 - (1_760_000_000 % 86400) + 82800;
+  const rows = [
+    { time: londonMidnight - 86400, open: 1.12, high: 1.13, low: 1.11, close: 1.125, volume: 0 },
+    { time: londonMidnight, open: 1.125, high: 1.128, low: 1.12, close: 1.121, volume: 0 },
+  ];
+  const out = normaliseYahooRows(rows, 86400, 400);
+  assert.deepEqual(
+    out.map((c) => c.time),
+    rows.map((c) => c.time),
+    "daily timestamps must pass through untouched",
+  );
 });
 
 async function run(): Promise<void> {

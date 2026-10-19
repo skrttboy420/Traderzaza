@@ -662,8 +662,8 @@ export const PHRASES = {
     th: "SL อยู่ที่เดียวกับราคาเข้า จึงคำนวณขนาดไม้ไม่ได้",
   },
   "risk.warn.belowMinLot": {
-    en: "The calculated size is below the smallest tradable lot (0.01). Either the stop is too wide for this account or the risk percent is too small.",
-    th: "ขนาดไม้ที่คำนวณได้น้อยกว่าล็อตต่ำสุด (0.01) อาจเพราะ SL กว้างเกินไปสำหรับพอร์ตนี้ หรือเปอร์เซ็นต์ความเสี่ยงต่ำเกินไป",
+    en: "No tradable size at this stop. The smallest lot ({minLot}) would risk {minLotRisk}, which is {minLotPercent}% of the account — more than the {riskPercent}% you set. Skip it, or take it only if you accept {minLotPercent}% on this one.",
+    th: "SL นี้คิดขนาดไม้ที่เทรดได้จริงไม่ได้ ล็อตต่ำสุด ({minLot}) เสี่ยง {minLotRisk} = {minLotPercent}% ของพอร์ต มากกว่า {riskPercent}% ที่ตั้งไว้ ข้ามไม้นี้ หรือจะเอาก็ต้องรับ {minLotPercent}% ในไม้นี้",
   },
   "risk.warn.smallAccount": {
     en: "Small account mode: at this balance one normal-sized loss is a large share of the account. Consider a probe entry and fewer concurrent positions.",

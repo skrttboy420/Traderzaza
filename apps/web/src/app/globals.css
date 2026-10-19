@@ -239,12 +239,38 @@ textarea.input {
   min-width: 2.75rem;
 }
 
+/* Horizontal strips: filter pills, plan tabs, day tabs.
+   The hidden scrollbar is right on a touch screen — you swipe, and a bar
+   would just be clutter. On a desktop mouse it was a trap: no scrollbar, no
+   drag, and a vertical wheel does nothing to a horizontal strip, so anything
+   past the right edge was simply unreachable. The guide's jump list ran
+   1709px inside an 892px column — half its links could not be reached at all.
+   So the bar comes back wherever the pointer is a mouse, and stays hidden
+   wherever it is a finger. */
 .scroll-x {
   overflow-x: auto;
   scrollbar-width: none;
 }
 .scroll-x::-webkit-scrollbar {
   display: none;
+}
+
+@media (pointer: fine) {
+  .scroll-x {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-surface-3) transparent;
+  }
+  .scroll-x::-webkit-scrollbar {
+    display: block;
+    height: 6px;
+  }
+  .scroll-x::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scroll-x::-webkit-scrollbar-thumb {
+    background: var(--color-surface-3);
+    border-radius: 999px;
+  }
 }
 
 ::-webkit-scrollbar {

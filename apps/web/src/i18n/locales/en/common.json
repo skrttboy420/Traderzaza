@@ -12,7 +12,8 @@
     "coach": "Coach",
     "training": "Training",
     "guide": "Guide",
-    "settings": "Settings"
+    "settings": "Settings",
+    "more": "More"
   },
   "dataQuality": {
     "label": "Data quality",
@@ -26,6 +27,8 @@
   },
   "actions": {
     "refresh": "Refresh",
+    "refreshing": "Refreshing…",
+    "refreshHint": "Read the charts again and redo the analysis. Candles already fetched are reused for up to a quarter of a bar, so a refresh within that window recomputes without spending another request.",
     "back": "Back",
     "viewDetail": "View detail",
     "save": "Save",
@@ -40,6 +43,13 @@
     "loading": "Loading...",
     "empty": "Nothing here yet",
     "error": "Something went wrong"
+  },
+  "feed": {
+    "partialTitle": "Some markets were not checked",
+    "partialHint": "Their data did not arrive, so they were left out of the reading below. Whatever this screen says, it does not say anything about them.",
+    "noneTitle": "No market was checked",
+    "noneHint": "No data arrived for any market, so nothing on this screen was measured. This is an empty screen, not a quiet market — do not read it as one.",
+    "retryHint": "Usually a passing network or rate-limit problem. Refresh in a moment."
   },
   "language": {
     "label": "Language",

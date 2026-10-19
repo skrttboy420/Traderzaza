@@ -22,6 +22,7 @@ export interface ServerEnv {
   anthropicModel: string | undefined;
   twelveDataApiKey: string | undefined;
   enableBinance: boolean;
+  enableYahoo: boolean;
   forceDemo: boolean;
   candleLimit: number;
   newsEnabled: boolean;
@@ -39,6 +40,7 @@ export function serverEnv(): ServerEnv {
     anthropicModel: env.ANTHROPIC_MODEL || undefined,
     twelveDataApiKey: env.TWELVE_DATA_API_KEY || undefined,
     enableBinance: flag(env.ENABLE_BINANCE, true),
+    enableYahoo: flag(env.ENABLE_YAHOO, true),
     forceDemo: flag(env.FORCE_DEMO_DATA, false),
     candleLimit: num(env.CANDLE_LIMIT, 400),
     newsEnabled: flag(env.ENABLE_NEWS, true),
@@ -59,6 +61,8 @@ export interface Capabilities {
   database: boolean;
   liveCrypto: boolean;
   liveForex: boolean;
+  /** Gold and silver, which need a metals feed that FX providers do not cover. */
+  liveMetals: boolean;
   forcedDemo: boolean;
   news: boolean;
 }
@@ -68,7 +72,8 @@ export function capabilities(env: ServerEnv = serverEnv()): Capabilities {
     llm: Boolean(env.anthropicApiKey),
     database: Boolean(env.supabaseUrl && env.supabaseAnonKey),
     liveCrypto: env.enableBinance && !env.forceDemo,
-    liveForex: Boolean(env.twelveDataApiKey) && !env.forceDemo,
+    liveForex: (env.enableYahoo || Boolean(env.twelveDataApiKey)) && !env.forceDemo,
+    liveMetals: Boolean(env.twelveDataApiKey) && !env.forceDemo,
     forcedDemo: env.forceDemo,
     news: env.newsEnabled,
   };

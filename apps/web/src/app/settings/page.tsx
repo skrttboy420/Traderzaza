@@ -22,6 +22,7 @@ interface StatusPayload {
     database: boolean;
     liveCrypto: boolean;
     liveForex: boolean;
+    liveMetals: boolean;
     forcedDemo: boolean;
   };
   candleLimit: number;
@@ -33,6 +34,12 @@ interface StatusPayload {
     provider: string;
     quality: DataQuality;
   }[];
+  quota: {
+    minuteUsed: number;
+    minuteLimit: number;
+    dayUsed: number;
+    dayLimit: number;
+  } | null;
 }
 
 const LAYER_KEYS: (keyof ChartLayers)[] = ["swings", "structure", "zones", "entries"];
@@ -315,15 +322,15 @@ export default function SettingsPage() {
         <section className="card p-4">
           <SectionTitle title={t("data.title")} subtitle={t("data.subtitle")} />
 
-          <Field label={t("data.refreshInterval")}>
+          <Field label={t("data.refreshInterval")} hint={t("data.refreshIntervalHint")}>
             <input
               type="number"
               inputMode="numeric"
-              min={15}
+              min={0}
               max={600}
               step={5}
-              value={settings.refreshSeconds || ""}
-              onChange={(e) => patch({ refreshSeconds: Number(e.target.value) })}
+              value={settings.refreshSeconds}
+              onChange={(e) => patch({ refreshSeconds: Math.max(0, Number(e.target.value)) })}
               className="field num"
             />
           </Field>
@@ -361,10 +368,37 @@ export default function SettingsPage() {
                 </p>
               ) : null}
 
-              {!status.capabilities.liveForex ? (
+              {!status.capabilities.liveMetals ? (
                 <p className="mt-2.5 text-[11.5px] leading-relaxed text-[var(--color-faint)]">
                   {t("data.noKeyNotice")}
                 </p>
+              ) : null}
+
+              {/* The metered feed is the one source here that can stop working
+                  through ordinary use rather than through a fault, so the spend
+                  is shown as a number. Without it, "gold says DEMO" looks like a
+                  bug; with it, the cause is on screen. The count is this server
+                  process's own, which is why the note says so rather than
+                  presenting it as the provider's authoritative total. */}
+              {status.quota ? (
+                <div className="mt-3 border-t border-[var(--color-border)] pt-2.5">
+                  <p className="mb-1.5 text-[11px] uppercase tracking-wide text-[var(--color-faint)]">
+                    {t("data.quotaTitle")}
+                  </p>
+                  <div className="divide-y divide-[var(--color-border)]">
+                    <Row
+                      label={t("data.quotaMinute")}
+                      value={`${status.quota.minuteUsed} / ${status.quota.minuteLimit}`}
+                    />
+                    <Row
+                      label={t("data.quotaDay")}
+                      value={`${status.quota.dayUsed} / ${status.quota.dayLimit}`}
+                    />
+                  </div>
+                  <p className="mt-2 text-[11px] leading-relaxed text-[var(--color-faint)]">
+                    {t("data.quotaNote")}
+                  </p>
+                </div>
               ) : null}
             </>
           ) : (
@@ -470,13 +504,36 @@ export default function SettingsPage() {
         <section className="card p-4">
           <SectionTitle title={t("storage.title")} />
           <div className="divide-y divide-[var(--color-border)]">
-            <Row
-              label={t("storage.mode")}
-              value={
-                status?.capabilities.database ? t("storage.supabase") : t("storage.localOnly")
-              }
-            />
+            {/* Always local: store.ts writes to localStorage whether or not a
+                database is connected. Saying "Supabase" here because the keys
+                are set would be a claim the code does not back up. */}
+            <Row label={t("storage.mode")} value={t("storage.localOnly")} />
           </div>
+
+          {status?.capabilities.database ? (
+            <p className="mt-2.5 text-[11.5px] leading-relaxed text-[var(--color-faint)]">
+              {t("storage.accountsOnly")}
+            </p>
+          ) : null}
+
+          {/* "This device only" is true of storage and silent about transmission,
+              which is the half that matters when the coach is used: the journal
+              travels with the question. Stating it here, next to the claim it
+              qualifies, rather than in a policy page nobody opens. The AI line
+              is driven by the real capability flag — promising that nothing is
+              sent while a key is configured would be the same class of lie. */}
+          <p className="mt-3 mb-1.5 text-[11px] uppercase tracking-wide text-[var(--color-faint)]">
+            {t("storage.leavesTitle")}
+          </p>
+          <Bullets
+            glyph="→"
+            items={[
+              t("storage.leavesTrading"),
+              ...(status?.capabilities.database ? [t("storage.leavesAccount")] : []),
+              t("storage.leavesMarket"),
+              t(status?.capabilities.llm ? "storage.leavesCoach" : "storage.leavesCoachOff"),
+            ]}
+          />
 
           <div className="mt-3 flex flex-col gap-2 sm:flex-row">
             <button

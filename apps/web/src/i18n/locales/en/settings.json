@@ -33,7 +33,12 @@
     "forceDemo": "Force demo data",
     "forceDemoHint": "Use this to explore the system without hitting real APIs.",
     "refreshInterval": "Refresh interval (seconds)",
-    "noKeyNotice": "No market data API key configured. Markets without a direct feed use demo data and are clearly labelled DEMO."
+    "refreshIntervalHint": "How often the scanning screens re-read the charts on their own. Set it to 0 to refresh only when you press the ⟳ button. Auto-refresh pauses whenever the tab is in the background, so a phone left in a pocket does not spend the day's credits on a chart nobody is reading.",
+    "noKeyNotice": "Forex and crypto are live with no key. Gold still needs TWELVE_DATA_API_KEY — until then it uses demo data and is clearly labelled DEMO.",
+    "quotaTitle": "Free-tier credits",
+    "quotaMinute": "This minute",
+    "quotaDay": "Today",
+    "quotaNote": "Gold and silver are the only metered feeds, and loading one symbol's 4H/1H/15M/5M chain costs four credits. Responses are cached, so moving between screens is free; and when the allowance does run out the chart keeps the last real candles and says how old they are, rather than switching to demo prices. This counts what this server has spent, so the provider's own total can be higher."
   },
   "ai": {
     "title": "AI assistant",
@@ -75,9 +80,15 @@
     "title": "Your data",
     "mode": "Storage mode",
     "localOnly": "This device only",
-    "supabase": "Database (Supabase)",
+    "accountsOnly": "A Supabase database is connected, but it is used for accounts only. Your trading data still lives in this browser.",
     "clear": "Clear local data",
-    "clearConfirm": "This deletes the settings, journal entries and positions stored in this browser. It cannot be undone."
+    "clearConfirm": "This deletes the settings, journal entries and positions stored in this browser. It cannot be undone.",
+    "leavesTitle": "What leaves this device",
+    "leavesTrading": "Nothing uploads your journal, settings, rules or positions on its own. They are written to this browser and stay there until you export or clear them.",
+    "leavesAccount": "Your account is a username and a password, kept by Supabase. No trading data is attached to it.",
+    "leavesMarket": "Prices and the calendar are fetched by the server, not by your browser, and the request carries only a market symbol and a timeframe — nothing about you.",
+    "leavesCoach": "When you ask the coach a question, the setup on screen and your most recent journal entries travel with it — first to this app's server, then on to Anthropic as part of the prompt. That is what lets the coach say anything about your own habits. Skip the coach, or clear the journal first, and there is nothing to send.",
+    "leavesCoachOff": "No AI key is configured, so coach answers are written by the engine on this app's own server. Your journal reaches that server with the question and goes no further — no AI provider sees it."
   },
   "about": {
     "title": "About",
@@ -89,10 +100,10 @@
     "limitations": "Known limitations",
     "howItWorks": "All the maths is computed in code, not by a language model. The language model only explains and teaches.",
     "limits": {
-      "data": "Metals and FX fall back to DEMO data unless a market-data API key is configured. Crypto streams live from Binance without a key.",
+      "data": "Crypto and FX are live with no key — Binance for crypto, Yahoo Finance for FX. Gold and silver still need TWELVE_DATA_API_KEY; until it is set they run on DEMO data and are labelled DEMO everywhere they appear.",
       "llm": "Without ANTHROPIC_API_KEY the explanations come straight from the engine: drier wording, identical numbers.",
-      "storage": "No database is connected, so the journal and settings live in this browser only.",
-      "news": "No news feed is wired up. The system will say it has no news data rather than invent any.",
+      "storage": "Trading data — journal, settings, rules, positions — lives in this browser only. It does not sync between devices yet, even with a database connected and an account signed in.",
+      "news": "The feed is an economic calendar — scheduled releases and their impact rating — not a headline wire. TradingView is the source, with ForexFactory behind it. Both are free endpoints that can stop answering, and when that happens the system says it has no news data rather than invent any.",
       "realtime": "Data is polled, not streamed over WebSocket, so prices can lag your broker slightly.",
       "backtest": "Replay training uses whatever real history the provider returns. It is not yet a backtester that persists results."
     }
