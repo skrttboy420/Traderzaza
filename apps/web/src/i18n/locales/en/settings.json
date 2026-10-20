@@ -10,7 +10,9 @@
     "smallAccount": "Small Account Mode",
     "smallAccountHint": "With a small account the system reduces size and only surfaces higher-grade setups.",
     "maxTradesPerDay": "Max trades per day",
-    "maxOpenPositions": "Max concurrent positions"
+    "maxOpenPositions": "Max concurrent positions",
+    "maxDailyLossR": "Daily loss limit (R)",
+    "maxDailyLossRHint": "Down this much in a day and the app tells you to stop. 2R means two full stops. 0 turns it off."
   },
   "watchlist": {
     "title": "Watchlist",

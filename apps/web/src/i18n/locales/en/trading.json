@@ -7,6 +7,49 @@
     "summary": "Scanner summary",
     "rank": "Rank"
   },
+  "expectancy": {
+    "title": "What your trading is earning",
+    "sample": "{{trades}} closed trades",
+    "perTrade": "per trade, at your current risk",
+    "perDay": "{{money}} per day traded, across {{days}} days with a trade on them.",
+    "thin": "Too few trades to call this an edge yet. {{needed}} more closed trades before the figure means anything.",
+    "winRate": "Win rate",
+    "profitFactor": "Profit factor",
+    "totalR": "Total",
+    "oneR": "1R"
+  },
+  "afford": {
+    "stopPoints": "Stop {{points}} pts",
+    "ceiling": "your account takes {{points}}",
+    "needs": "needs {{balance}}",
+    "ceilingTitle": "What this balance can carry",
+    "ceilingBody": "At {{risk}}% risk your account can take a stop up to {{points}} points on {{symbol}} ({{distance}}). Wider than that and the smallest lot your broker accepts already risks more than you set.",
+    "ceilingNone": "This market sizes in fractional units, so any stop width can be sized to your risk. No minimum lot limits you here."
+  },
+  "guard": {
+    "stopTitle": "Daily limit reached — done for today",
+    "cautionTitle": "Close to your daily limit",
+    "clearTitle": "Today so far",
+    "netR": "Net",
+    "tradesToday": "Trades",
+    "openPositions": "Open",
+    "lossStreak": "Losing streak"
+  },
+  "session": {
+    "liquidity": {
+      "high": "Deep liquidity",
+      "normal": "Normal liquidity",
+      "thin": "Thin liquidity",
+      "closed": "Market closed"
+    },
+    "name": {
+      "asia": "Asia",
+      "london": "London",
+      "newYork": "New York"
+    },
+    "closesIn": "Closes in {{time}}",
+    "opensIn": "Opens in {{time}}"
+  },
   "scannerState": {
     "ENTRY_NOW": "Entry now",
     "WAIT_CONFIRMATION": "Wait for confirmation",

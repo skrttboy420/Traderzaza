@@ -678,6 +678,69 @@ export const PHRASES = {
     th: "เสี่ยงเกิน 2% ต่อไม้ ออกนอกแผนที่โค้ชตัวนี้ยึดอยู่",
   },
 
+  "label.session.asia": { en: "Asia", th: "ตลาดเอเชีย" },
+  "label.session.london": { en: "London", th: "ตลาดลอนดอน" },
+  "label.session.newYork": { en: "New York", th: "ตลาดนิวยอร์ก" },
+
+  // --------------------------------------------------------------- sessions
+  "session.note.overlap": {
+    en: "London and New York are both open — the deepest liquidity of the day. Levels tested now are tested by real size.",
+    th: "ลอนดอนกับนิวยอร์กเปิดพร้อมกัน สภาพคล่องดีที่สุดของวัน แนวที่ถูกทดสอบช่วงนี้คือถูกทดสอบด้วยเงินจริงๆ",
+  },
+  "session.note.active": {
+    en: "{session} is open. Normal participation — the structure on the chart is being traded by the people who drew it.",
+    th: "{session}เปิดอยู่ คนเทรดปกติ โครงสร้างบนกราฟกำลังถูกเทรดโดยคนกลุ่มเดียวกับที่สร้างมันขึ้นมา",
+  },
+  "session.note.asiaOnly": {
+    en: "Asia only. Gold and the majors drift and wick in these hours — a level breaking now is breaking on volume nobody is defending, which is how a stop gets taken before the move goes the other way.",
+    th: "เปิดแค่ตลาดเอเชีย ทองกับคู่เงินหลักช่วงนี้มักออกข้างและลากไส้ แนวที่หลุดตอนนี้คือหลุดด้วยวอลุ่มที่ไม่มีใครสู้ ซึ่งเป็นจังหวะที่โดนกิน SL ก่อนราคาวิ่งกลับทาง",
+  },
+  "session.note.gap": {
+    en: "Between sessions — New York has gone home and Tokyo has not arrived. {session} opens in {minutes} minutes.",
+    th: "ช่วงคาบเกี่ยว นิวยอร์กปิดแล้วแต่โตเกียวยังไม่เปิด อีก {minutes} นาที{session}จะเปิด",
+  },
+  "session.note.closed": {
+    en: "The spot FX and metals week is closed. Crypto still trades. {session} opens in {minutes} minutes.",
+    th: "ตลาด FX และโลหะปิดทำการประจำสัปดาห์ คริปโตยังเทรดได้ อีก {minutes} นาที{session}จะเปิด",
+  },
+
+  // ----------------------------------------------------------- daily guard
+  // Said to someone who is losing and wants to keep going. Every one of these
+  // names the number the trader themselves set, because the only argument that
+  // works in that state is their own.
+  "guard.stop.dailyLoss": {
+    en: "Down {lossR}R today — that is the {limitR}R daily limit you set. The day is done. The account that takes tomorrow's setup is the one you protect right now.",
+    th: "วันนี้ติดลบ {lossR}R ถึงลิมิตขาดทุนรายวัน {limitR}R ที่ตั้งไว้เอง พอแค่นี้ก่อน พอร์ตที่เหลือไว้เทรดพรุ่งนี้สำคัญกว่าไม้ที่อยากเอาคืนตอนนี้",
+  },
+  "guard.caution.dailyLoss": {
+    en: "Down {lossR}R of your {limitR}R daily limit. {remainingR}R left before the day closes itself.",
+    th: "วันนี้ติดลบ {lossR}R จากลิมิต {limitR}R ที่ตั้งไว้ เหลืออีก {remainingR}R ก่อนระบบจะปิดวันให้",
+  },
+  "guard.stop.tradeCount": {
+    en: "{taken} trades opened today, which is your limit of {limit}. Trading on after the plan is spent is how a flat day becomes a bad one.",
+    th: "วันนี้เปิดไปแล้ว {taken} ไม้ ครบลิมิต {limit} ไม้ที่ตั้งไว้ เทรดต่อหลังหมดแผนคือจุดที่วันเสมอตัวกลายเป็นวันแย่",
+  },
+  "guard.caution.tradeCount": {
+    en: "{taken} of {limit} trades today. One left — spend it on the best setup you see, not the next one you see.",
+    th: "วันนี้เทรดไป {taken} จาก {limit} ไม้ เหลืออีกไม้เดียว เก็บไว้ให้ setup ที่ดีที่สุด ไม่ใช่ไม้ถัดไปที่เจอ",
+  },
+  "guard.stop.openPositions": {
+    en: "{open} positions open, your limit is {limit}. Close one or move it to break-even before adding another — four positions on one wrong read is four stops, not one.",
+    th: "ตอนนี้ถือไม้อยู่ {open} ไม้ ชนลิมิต {limit} ไม้ที่ตั้งไว้ ปิดสักไม้หรือเลื่อน SL ไป break-even ก่อนค่อยเปิดเพิ่ม อ่านผิดครั้งเดียวแต่ถือ 4 ไม้ ก็โดน SL 4 ไม้ ไม่ใช่ไม้เดียว",
+  },
+  "guard.caution.lossStreak": {
+    en: "{streak} losses in a row. Nothing is proven wrong with the method yet, but this is the point where size creeps up and rules get skipped. Same size, same rules, or stop.",
+    th: "แพ้ติดกัน {streak} ไม้ ยังไม่ได้แปลว่าระบบพัง แต่ตรงนี้แหละที่คนเริ่มเพิ่มไม้และข้ามกฎ ถ้าจะเทรดต่อ ใช้ขนาดเดิม กฎเดิม ไม่งั้นหยุด",
+  },
+  "guard.clear": {
+    en: "{taken} of {limit} trades today, {netR}R in total. Inside your limits.",
+    th: "วันนี้เทรดไป {taken} จาก {limit} ไม้ ผลรวม {netR}R ยังอยู่ในลิมิตที่ตั้งไว้",
+  },
+  "guard.clearNoCount": {
+    en: "{taken} trades today, {netR}R in total. No daily trade cap is set.",
+    th: "วันนี้เทรดไป {taken} ไม้ ผลรวม {netR}R ยังไม่ได้ตั้งเพดานจำนวนไม้ต่อวัน",
+  },
+
   "risk.be.noStopDistance": {
     en: "Stop distance is zero, so there is nothing to move.",
     th: "ระยะ SL เป็นศูนย์ จึงไม่มีอะไรให้ขยับ",

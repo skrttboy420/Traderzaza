@@ -77,6 +77,58 @@ export function calculateRisk(input: RiskInput): RiskOutput {
   return { riskAmount, stopDistance, stopDistancePips, positionSize, unit, warnings };
 }
 
+export interface AffordableStop {
+  /** Widest stop, in price, the account can size at the broker's minimum lot. */
+  distance: number;
+  /** The same width in the instrument's pips. */
+  pips: number;
+  /** The same width in minimum ticks — "points" as a retail platform shows them. */
+  points: number;
+  /** Money at risk at that width and the minimum lot, which is exactly 1R. */
+  riskAmount: number;
+}
+
+/**
+ * The widest stop this account can actually take.
+ *
+ * `calculateRisk` answers "can I size this particular trade" after the trade
+ * exists. This answers the question that comes first and gets asked out loud:
+ * *how wide a stop can I afford at all?* A trader with $300 asking for a
+ * 500-point stop on gold deserves a number, not a refusal after the fact.
+ *
+ * Derived rather than configured. The broker's minimum lot is fixed, so a
+ * balance and a risk percent already determine the answer — there is no third
+ * knob, and offering one would only let the trader set a stop the account
+ * cannot pay for.
+ *
+ * `null` where no lot minimum binds. Crypto sizes in fractional units, so any
+ * stop width can be sized down to meet the risk; the constraint there is
+ * exchange notional, which is a different question with a different answer.
+ */
+export function maxAffordableStop(
+  accountBalance: number,
+  riskPercent: number,
+  asset: Asset,
+): AffordableStop | null {
+  if (asset.pipValuePerLot === null) return null;
+  if (accountBalance <= 0 || riskPercent <= 0) return null;
+
+  const pipSize = asset.pipSize > 0 ? asset.pipSize : asset.minTick;
+  const riskPerPipAtMinLot = MIN_LOT * asset.pipValuePerLot;
+  if (pipSize <= 0 || riskPerPipAtMinLot <= 0) return null;
+
+  const riskAmount = (accountBalance * riskPercent) / 100;
+  const pips = riskAmount / riskPerPipAtMinLot;
+  const distance = pips * pipSize;
+
+  return {
+    distance,
+    pips: Number(pips.toFixed(1)),
+    points: asset.minTick > 0 ? Math.round(distance / asset.minTick) : 0,
+    riskAmount: Number(riskAmount.toFixed(2)),
+  };
+}
+
 export interface StopSuggestion {
   price: number;
   reason: Phrase;
@@ -254,6 +306,220 @@ export function summarizePerformance(trades: Trade[]): PerformanceSummary {
     maxDrawdownR: Number(maxDd.toFixed(2)),
     averageWinR: wins.length > 0 ? Number((grossWin / wins.length).toFixed(2)) : 0,
     averageLossR: losses.length > 0 ? Number((grossLoss / losses.length).toFixed(2)) : 0,
+  };
+}
+
+/**
+ * Closed trades below which an expectancy figure is noise wearing a decimal
+ * point. Twenty is not a statistical threshold — nothing magic happens at
+ * twenty — it is the point below which a single outlier still moves the
+ * average far enough to flip its sign, and a number that can flip its sign is
+ * not yet an answer to "does this work".
+ */
+export const EXPECTANCY_MIN_SAMPLE = 20;
+
+export type SampleConfidence = "none" | "thin" | "usable";
+
+export interface ExpectancyReading extends PerformanceSummary {
+  /** Expected money per trade at the supplied 1R. */
+  perTradeMoney: number;
+  /** What the recorded R is worth in money at the supplied 1R. */
+  totalMoney: number;
+  /** Distinct calendar days on which a trade was closed. */
+  tradingDays: number;
+  /** Money per day actually traded — not per day on the calendar. */
+  perDayMoney: number;
+  confidence: SampleConfidence;
+  /** Closed trades still needed before the sample means anything. */
+  tradesNeeded: number;
+}
+
+/**
+ * "Is this actually making money?" — in money, not in R.
+ *
+ * R is the right unit for risk and the wrong unit for motivation. A trader
+ * working for daily expenses needs the answer in the currency they buy lunch
+ * with, and the translation is one multiplication that nobody does in their
+ * head at the end of a session.
+ *
+ * Deliberately computed against the *current* 1R rather than each trade's
+ * historical risk. It answers the forward-looking question — "if I keep
+ * trading this way at today's size, what does a trade earn" — which is the one
+ * worth asking. It is not a P&L statement, and the gap between the two grows
+ * with every change to the balance.
+ *
+ * `utcOffsetMinutes` is the trader's offset, so the per-day figure counts days
+ * as they experienced them. An evening session that crosses UTC midnight would
+ * otherwise be billed as two trading days and halve the headline.
+ */
+export function expectancy(
+  trades: Trade[],
+  riskAmount: number,
+  utcOffsetMinutes = 0,
+): ExpectancyReading {
+  const summary = summarizePerformance(trades);
+
+  const offsetSeconds = utcOffsetMinutes * 60;
+  const days = new Set<number>();
+  for (const t of trades) {
+    if (t.closedAt === null || t.resultR === null) continue;
+    days.add(Math.floor((t.closedAt + offsetSeconds) / 86_400));
+  }
+  const tradingDays = days.size;
+
+  const money = (r: number): number => Number((r * riskAmount).toFixed(2));
+  const totalMoney = money(summary.totalR);
+
+  return {
+    ...summary,
+    perTradeMoney: money(summary.expectancyR),
+    totalMoney,
+    tradingDays,
+    perDayMoney: tradingDays > 0 ? Number((totalMoney / tradingDays).toFixed(2)) : 0,
+    confidence:
+      summary.trades === 0 ? "none" : summary.trades < EXPECTANCY_MIN_SAMPLE ? "thin" : "usable",
+    tradesNeeded: Math.max(0, EXPECTANCY_MIN_SAMPLE - summary.trades),
+  };
+}
+
+export type DailyGuardState = "clear" | "caution" | "stop";
+
+export interface DailyLimits {
+  /** Net R down that ends the day. 0 disables the check. */
+  maxDailyLossR: number;
+  /** Trades opened since `dayStart`. 0 disables the check. */
+  maxTradesPerDay: number;
+  /** Positions held at the same time. 0 disables the check. */
+  maxOpenPositions: number;
+}
+
+export interface DailyGuardInput {
+  trades: Pick<Trade, "openedAt" | "closedAt" | "resultR">[];
+  /**
+   * Unix seconds for the start of the trader's day. Passed in rather than
+   * derived, because "today" is a wall-clock fact about where the trader is
+   * sitting and this module has no business guessing a timezone.
+   */
+  dayStart: number;
+  limits: DailyLimits;
+}
+
+export interface DailyGuard {
+  state: DailyGuardState;
+  /** Sum of R across trades closed since `dayStart`. Negative is a loss. */
+  netR: number;
+  tradesToday: number;
+  openPositions: number;
+  /** Consecutive losing closes ending at the most recent one. */
+  lossStreak: number;
+  /** R left before the daily loss limit trips. `null` when no limit is set. */
+  remainingR: number | null;
+  /** Trades left today. `null` when no limit is set. */
+  remainingTrades: number | null;
+  reasons: Phrase[];
+}
+
+/**
+ * The circuit breaker.
+ *
+ * A trader with an edge still loses the account on the day the edge stops being
+ * the thing driving the clicks. That day is not subtle — it is three stops in a
+ * row and a fourth trade taken bigger to get it back — but it is invisible from
+ * inside, which is why the limit has to be set while calm and enforced while
+ * not.
+ *
+ * Three independent brakes, because they fail in different ways: R lost catches
+ * the bad day, trade count catches the overtrading that produces it, and open
+ * positions catches the correlated pile-up that turns one wrong read into four
+ * simultaneous stops. Any one of them tripping is a stop; they are not scored
+ * against each other.
+ *
+ * Nothing here blocks an order — this app places none. It states the number the
+ * trader already agreed to, at the moment they are least likely to recall it.
+ *
+ * The loss streak deliberately ignores `dayStart`. Tilt does not reset at
+ * midnight; a trader who lost three in a row an hour before the date changed is
+ * the same trader an hour after.
+ */
+export function dailyGuard(input: DailyGuardInput): DailyGuard {
+  const { trades, dayStart, limits } = input;
+
+  const closedToday = trades
+    .filter((t) => t.closedAt !== null && t.closedAt >= dayStart)
+    .sort((a, b) => (a.closedAt ?? 0) - (b.closedAt ?? 0));
+
+  const netR = Number(closedToday.reduce((sum, t) => sum + (t.resultR ?? 0), 0).toFixed(2));
+  const tradesToday = trades.filter((t) => t.openedAt >= dayStart).length;
+  const openPositions = trades.filter((t) => t.closedAt === null).length;
+
+  const allClosed = trades
+    .filter((t) => t.closedAt !== null && t.resultR !== null)
+    .sort((a, b) => (a.closedAt ?? 0) - (b.closedAt ?? 0));
+  let lossStreak = 0;
+  for (let i = allClosed.length - 1; i >= 0; i -= 1) {
+    if ((allClosed[i]?.resultR ?? 0) >= 0) break;
+    lossStreak += 1;
+  }
+
+  const lossLimit = limits.maxDailyLossR > 0 ? limits.maxDailyLossR : null;
+  const tradeLimit = limits.maxTradesPerDay > 0 ? limits.maxTradesPerDay : null;
+  const openLimit = limits.maxOpenPositions > 0 ? limits.maxOpenPositions : null;
+
+  const remainingR = lossLimit === null ? null : Number(Math.max(0, lossLimit + netR).toFixed(2));
+  const remainingTrades = tradeLimit === null ? null : Math.max(0, tradeLimit - tradesToday);
+
+  const stops: Phrase[] = [];
+  const cautions: Phrase[] = [];
+
+  if (lossLimit !== null && netR <= -lossLimit) {
+    stops.push(p("guard.stop.dailyLoss", { lossR: Math.abs(netR), limitR: lossLimit }));
+  } else if (lossLimit !== null && netR <= -lossLimit / 2) {
+    cautions.push(
+      p("guard.caution.dailyLoss", {
+        lossR: Math.abs(netR),
+        limitR: lossLimit,
+        remainingR: remainingR ?? 0,
+      }),
+    );
+  }
+
+  if (tradeLimit !== null && tradesToday >= tradeLimit) {
+    stops.push(p("guard.stop.tradeCount", { taken: tradesToday, limit: tradeLimit }));
+  } else if (tradeLimit !== null && remainingTrades === 1) {
+    cautions.push(p("guard.caution.tradeCount", { taken: tradesToday, limit: tradeLimit }));
+  }
+
+  if (openLimit !== null && openPositions >= openLimit) {
+    stops.push(p("guard.stop.openPositions", { open: openPositions, limit: openLimit }));
+  }
+
+  if (lossStreak >= 2) cautions.push(p("guard.caution.lossStreak", { streak: lossStreak }));
+
+  const state: DailyGuardState =
+    stops.length > 0 ? "stop" : cautions.length > 0 ? "caution" : "clear";
+
+  const reasons = [...stops, ...cautions];
+
+  // A day nothing has happened on has nothing to report. Saying "0 of 3 trades,
+  // 0R" every morning is how a warning becomes wallpaper, and the one that
+  // matters gets scrolled past with the rest.
+  if (state === "clear" && (tradesToday > 0 || openPositions > 0)) {
+    reasons.push(
+      tradeLimit === null
+        ? p("guard.clearNoCount", { taken: tradesToday, netR })
+        : p("guard.clear", { taken: tradesToday, limit: tradeLimit, netR }),
+    );
+  }
+
+  return {
+    state,
+    netR,
+    tradesToday,
+    openPositions,
+    lossStreak,
+    remainingR,
+    remainingTrades,
+    reasons,
   };
 }
 

@@ -4,9 +4,11 @@ import Link from "next/link";
 import type { Setup } from "@atc/types";
 
 import { useT, usePhrase } from "@/i18n/provider";
-import { formatPrice, formatRange, formatRr, timeframeLabel } from "@/lib/format";
+import { setupAffordability } from "@/lib/afford";
+import { formatMoney, formatPrice, formatRange, formatRr, timeframeLabel } from "@/lib/format";
 import { isInvalidated, primaryPlan } from "@/lib/setup";
 import { setupHref } from "@/lib/setup";
+import { useSettings } from "@/lib/store";
 import { QUALITY_VISUAL, SCANNER_VISUAL, directionVisual } from "./visual";
 import { Badge, cx } from "./ui";
 
@@ -37,11 +39,18 @@ export function SetupCard({
 }) {
   const t = useT("trading");
   const say = usePhrase();
+  const { settings, loaded: settingsLoaded } = useSettings();
   const dead = isInvalidated(setup);
   const scanner = SCANNER_VISUAL[setup.scannerState];
   const dir = directionVisual(setup.direction);
   const grade = QUALITY_VISUAL[setup.quality.grade];
   const plan = primaryPlan(setup);
+
+  // Gated on `loaded` rather than rendered optimistically. Before localStorage
+  // comes back the balance is the $1,000 default, and a card that says "too
+  // wide for your account" and then changes its mind a frame later teaches the
+  // trader to distrust the one label that is supposed to stop a bad trade.
+  const afford = settingsLoaded && !dead ? setupAffordability(setup, settings) : null;
 
   // Lead with the blocker when there is one, otherwise the reason to enter.
   const leadPhrase = setup.whyWait[0] ?? setup.whyEnter[0] ?? null;
@@ -122,6 +131,33 @@ export function SetupCard({
             <dd className="num mt-0.5 truncate text-[12.5px] font-medium">{formatRr(plan.riskReward)}</dd>
           </div>
         </dl>
+      ) : null}
+
+      {/* The stop measured in the units a retail platform shows, against what
+          this balance can carry. A setup can be grade A and still be one this
+          account cannot size — that is a fact about the account, and it
+          belongs on the card rather than three taps away. */}
+      {afford ? (
+        <p
+          className={cx(
+            "mt-2 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-[11px] leading-relaxed",
+            afford.affordable ? "text-[var(--color-faint)]" : "text-[var(--color-short)]",
+          )}
+        >
+          <span aria-hidden>{afford.affordable ? "◇" : "✕"}</span>
+          <span>
+            {t("afford.stopPoints", { points: afford.stopPoints.toLocaleString() })}
+            {" · "}
+            {t("afford.ceiling", { points: afford.ceiling.points.toLocaleString() })}
+          </span>
+          {afford.affordable ? null : (
+            <span className="font-medium">
+              {t("afford.needs", {
+                balance: formatMoney(afford.balanceNeeded, settings.currency),
+              })}
+            </span>
+          )}
+        </p>
       ) : null}
 
       {lead ? (

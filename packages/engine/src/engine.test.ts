@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import type { Candle } from "@atc/types";
+import type { Candle, Trade } from "@atc/types";
 import { generateCandles, requireAsset } from "@atc/market-data";
 import { atrAt, candleMetrics, priceText } from "./indicators";
 import { classifyTrend, detectStructureEvents, detectSwings, readStructure } from "./structure";
@@ -9,11 +9,16 @@ import { ReplayController, resolvePracticeCall } from "./replay";
 import {
   breakEvenDecision,
   calculateRisk,
+  dailyGuard,
   excursion,
+  expectancy,
+  EXPECTANCY_MIN_SAMPLE,
+  maxAffordableStop,
   resultR,
   structuralStop,
   summarizePerformance,
 } from "./risk";
+import { readSessions } from "./sessions";
 import { PHRASES, renderPhrase, trendPhrase, verdictPhrase } from "./phrases";
 
 /** Narrative assertions key off the phrase id, which is language-independent. */
@@ -525,6 +530,321 @@ test("performance summary computes expectancy, profit factor and drawdown", () =
   assert.equal(summary.profitFactor, 2.5);
   assert.equal(summary.expectancyR, 0.75);
   assert.equal(summary.maxDrawdownR, 2);
+});
+
+test("session windows follow the exchange's own clock, not a fixed UTC table", () => {
+  // The same UTC half-hour, six months apart. In January London's desk is
+  // still asleep; in July it has been open thirty minutes. Every retail
+  // "London = 08:00-17:00 GMT" table gets one of these two wrong, and being an
+  // hour out is what puts the overlap — the only window where a level is
+  // tested by real size — in the wrong place.
+  const winter = readSessions(new Date("2026-01-15T07:30:00Z"));
+  const summer = readSessions(new Date("2026-07-15T07:30:00Z"));
+  assert.equal(winter.active.includes("london"), false, "07:30 UTC in January is 07:30 in London");
+  assert.equal(summer.active.includes("london"), true, "07:30 UTC in July is 08:30 in London");
+});
+
+test("the London/New York overlap is found in both halves of the year", () => {
+  const winterOverlap = readSessions(new Date("2026-01-15T14:00:00Z"));
+  assert.deepEqual(winterOverlap.active, ["london", "newYork"]);
+  assert.equal(winterOverlap.overlap, true);
+  assert.equal(winterOverlap.liquidity, "high");
+  assert.equal(winterOverlap.note.key, "session.note.overlap");
+
+  const summerOverlap = readSessions(new Date("2026-07-15T14:00:00Z"));
+  assert.equal(summerOverlap.overlap, true);
+
+  // 12:30 UTC is the discriminating hour: New York is at 07:30 in winter and
+  // 08:30 in summer, so the overlap exists in one and not the other. A fixed
+  // table cannot be right about both.
+  assert.equal(readSessions(new Date("2026-01-15T12:30:00Z")).overlap, false);
+  assert.equal(readSessions(new Date("2026-07-15T12:30:00Z")).overlap, true);
+
+  // Minutes to close, read off the session's own clock. London sits at 14:00
+  // and shuts at 17:00.
+  const london = winterOverlap.sessions.find((s) => s.id === "london");
+  assert.equal(london?.minutesToChange, 180);
+});
+
+test("thin hours are named as thin, and the weekend as closed", () => {
+  // Tokyo alone. Price still moves here, which is the problem — this is the
+  // state worth labelling, not a quiet one.
+  const asiaOnly = readSessions(new Date("2026-01-15T02:00:00Z"));
+  assert.deepEqual(asiaOnly.active, ["asia"]);
+  assert.equal(asiaOnly.liquidity, "thin");
+  assert.equal(asiaOnly.note.key, "session.note.asiaOnly");
+
+  // New York has gone home, Tokyo opens at 09:00 JST — midnight UTC, two hours
+  // out. Nothing is open and the gap says how long it lasts.
+  const gap = readSessions(new Date("2026-01-15T22:00:00Z"));
+  assert.deepEqual(gap.active, []);
+  assert.equal(gap.fxClosed, false, "a Thursday evening is not the weekend");
+  assert.equal(gap.liquidity, "thin");
+  assert.deepEqual(gap.nextOpen, { id: "asia", minutes: 120 });
+
+  // Saturday. Spot FX and metals are genuinely shut; crypto is not, which is
+  // why this is a flag rather than a global "market closed".
+  const weekend = readSessions(new Date("2026-01-17T12:00:00Z"));
+  assert.equal(weekend.fxClosed, true);
+  assert.equal(weekend.liquidity, "closed");
+  assert.equal(weekend.note.key, "session.note.closed");
+  // Tokyo opens 09:00 JST Monday = midnight UTC Monday, 36 hours on.
+  assert.deepEqual(weekend.nextOpen, { id: "asia", minutes: 36 * 60 });
+});
+
+test("expectancy is reported in money per trade and per day actually traded", () => {
+  const base = {
+    symbol: "XAUUSD",
+    timeframe: "15m" as const,
+    direction: "long" as const,
+    entryType: "confirmation" as const,
+    entryPrice: 100,
+    stopLoss: 99,
+    takeProfits: [102],
+    size: 1,
+    exitPrice: 102,
+    mfeR: 2,
+    maeR: 0.3,
+    classification: null,
+    psychology: [],
+    setupId: null,
+    notes: "",
+  };
+  // Two trades on one UTC day, two on the next. 1R = $10.
+  const DAY = 86_400;
+  const trades = [
+    { ...base, id: "1", openedAt: DAY * 100, closedAt: DAY * 100 + 3600, resultR: 2 },
+    { ...base, id: "2", openedAt: DAY * 100, closedAt: DAY * 100 + 7200, resultR: -1 },
+    { ...base, id: "3", openedAt: DAY * 101, closedAt: DAY * 101 + 3600, resultR: -1 },
+    { ...base, id: "4", openedAt: DAY * 101, closedAt: DAY * 101 + 7200, resultR: 3 },
+  ];
+
+  const reading = expectancy(trades, 10);
+  assert.equal(reading.totalR, 3);
+  assert.equal(reading.perTradeMoney, 7.5, "0.75R expectancy at $10 per R");
+  assert.equal(reading.totalMoney, 30);
+  assert.equal(reading.tradingDays, 2);
+  assert.equal(reading.perDayMoney, 15, "per day traded, not per day on the calendar");
+
+  // Four trades cannot tell anyone whether a method works, and a headline that
+  // says "$15 a day" off four samples is the most expensive lie this app could
+  // tell. The sample size travels with the number.
+  assert.equal(reading.confidence, "thin");
+  assert.equal(reading.tradesNeeded, EXPECTANCY_MIN_SAMPLE - 4);
+
+  // The offset is what keeps an evening session from being billed as two days.
+  // Shifted far enough west, every one of these closes lands on the prior day.
+  const shifted = expectancy(trades, 10, -12 * 60);
+  assert.equal(shifted.tradingDays, 2, "a whole-day shift must not invent or merge days");
+  assert.equal(shifted.perDayMoney, 15);
+
+  // Both closes on day 100 sit at 01:00 and 02:00 UTC. An offset of -3h pulls
+  // them back into day 99 — a real regrouping, and proof the offset is used
+  // rather than accepted and ignored.
+  const evening = expectancy(
+    [
+      { ...base, id: "1", openedAt: DAY * 100, closedAt: DAY * 100 + 3600, resultR: 2 },
+      { ...base, id: "2", openedAt: DAY * 100, closedAt: DAY * 100 + 7200, resultR: -1 },
+      { ...base, id: "3", openedAt: DAY * 100, closedAt: DAY * 100 + 20 * 3600, resultR: 2 },
+    ],
+    10,
+    -3 * 60,
+  );
+  assert.equal(evening.tradingDays, 2, "two of these closes belong to the previous local day");
+
+  const empty = expectancy([], 10);
+  assert.equal(empty.confidence, "none");
+  assert.equal(empty.perDayMoney, 0, "no trades must not divide by zero");
+  assert.equal(empty.tradesNeeded, EXPECTANCY_MIN_SAMPLE);
+});
+
+test("the widest affordable stop is the inverse of the min-lot refusal", () => {
+  const gold = requireAsset("XAUUSD");
+
+  // $1,000 at 1% is $10 of risk. Gold's smallest lot costs $0.10 per pip, so
+  // the account can pay for 100 pips — $10.00 of price, 1,000 points on a
+  // retail platform. This is the number the trader actually asks for, and
+  // until now the app could only answer it by refusing a trade already built.
+  const widest = maxAffordableStop(1000, 1, gold);
+  assert.equal(widest?.pips, 100);
+  assert.equal(widest?.points, 1000);
+  assert.equal(widest?.riskAmount, 10);
+
+  // The two functions have to agree, or the app tells the trader a stop is
+  // affordable on one screen and refuses it on the next. Just inside the
+  // boundary sizes; just outside does not.
+  const inside = calculateRisk({
+    accountBalance: 1000,
+    riskPercent: 1,
+    entryPrice: 4000,
+    stopLoss: 4000 - (widest?.distance ?? 0) * 0.99,
+    asset: gold,
+  });
+  assert.ok(inside.positionSize >= 0.01, "a stop inside the limit must be sizeable");
+
+  const outside = calculateRisk({
+    accountBalance: 1000,
+    riskPercent: 1,
+    entryPrice: 4000,
+    stopLoss: 4000 - (widest?.distance ?? 0) * 1.01,
+    asset: gold,
+  });
+  assert.equal(outside.positionSize, 0, "a stop past the limit must be refused");
+  assert.ok(hasKey(outside.warnings, "risk.warn.belowMinLot"));
+
+  // Halving the balance halves the stop the account can carry. Obvious, and
+  // worth pinning: this is the whole argument for trading a smaller market
+  // rather than a tighter stop.
+  assert.equal(maxAffordableStop(500, 1, gold)?.points, 500);
+
+  // Crypto sizes in fractional units, so no lot minimum binds and there is no
+  // such ceiling to report. Returning 0 here would read as "no stop is
+  // affordable", which is the opposite of the truth.
+  assert.equal(maxAffordableStop(1000, 1, requireAsset("BTCUSDT")), null);
+  assert.equal(maxAffordableStop(0, 1, gold), null, "no balance, no answer");
+});
+
+/**
+ * A day that starts at a known second, so "today" and "yesterday" in these
+ * tests are exact rather than approximately now.
+ */
+const DAY_START = 1_760_000_000;
+const HOUR = 3600;
+
+/**
+ * The guard reads three fields off a trade and nothing else, so the fixtures
+ * carry three fields and nothing else. `id` is dropped deliberately: a fixture
+ * that satisfies the real signature is a fixture that proves the signature is
+ * narrow enough to be fed by a journal entry, a Supabase row, or anything else.
+ */
+type GuardTrade = Pick<Trade, "openedAt" | "closedAt" | "resultR">;
+
+function closedTrade(resultR: number, openedAt: number, closedAt = openedAt + HOUR): GuardTrade {
+  return { openedAt, closedAt, resultR };
+}
+
+function openTrade(openedAt: number): GuardTrade {
+  return { openedAt, closedAt: null, resultR: null };
+}
+
+test("the daily guard stops the day at the loss limit and not before", () => {
+  const limits = { maxDailyLossR: 2, maxTradesPerDay: 0, maxOpenPositions: 0 };
+
+  // One full stop of a two-stop limit. Halfway is a caution, not a stop: a
+  // trader told to quit after one loss would have no plan left by Tuesday.
+  const halfway = dailyGuard({
+    trades: [closedTrade(-1, DAY_START + HOUR)],
+    dayStart: DAY_START,
+    limits,
+  });
+  assert.equal(halfway.state, "caution");
+  assert.equal(halfway.netR, -1);
+  assert.equal(halfway.remainingR, 1);
+  assert.ok(hasKey(halfway.reasons, "guard.caution.dailyLoss"));
+
+  const atLimit = dailyGuard({
+    trades: [closedTrade(-1, DAY_START + HOUR), closedTrade(-1, DAY_START + 2 * HOUR)],
+    dayStart: DAY_START,
+    limits,
+  });
+  assert.equal(atLimit.state, "stop");
+  assert.equal(atLimit.remainingR, 0);
+  const stop = atLimit.reasons.find((r) => r.key === "guard.stop.dailyLoss");
+  assert.deepEqual(stop?.vars, { lossR: 2, limitR: 2 });
+
+  // A win inside the day genuinely buys back room. The limit is on net damage
+  // to the account, not on how many times the trader was wrong.
+  const recovered = dailyGuard({
+    trades: [
+      closedTrade(-1, DAY_START + HOUR),
+      closedTrade(-1, DAY_START + 2 * HOUR),
+      closedTrade(1.5, DAY_START + 3 * HOUR),
+    ],
+    dayStart: DAY_START,
+    limits,
+  });
+  assert.equal(recovered.netR, -0.5);
+  assert.equal(recovered.state, "clear");
+});
+
+test("yesterday's losses do not spend today's limit", () => {
+  // The bug this guards against is an off-by-one-day that makes the breaker
+  // fire permanently: once the account is down 2R lifetime, every morning
+  // opens closed. That is indistinguishable from a broken app, and the trader
+  // learns to ignore the banner — which is the one failure mode that matters.
+  const guard = dailyGuard({
+    trades: [
+      closedTrade(-1, DAY_START - 20 * HOUR, DAY_START - 19 * HOUR),
+      closedTrade(-1, DAY_START - 18 * HOUR, DAY_START - 17 * HOUR),
+      closedTrade(-1, DAY_START - 16 * HOUR, DAY_START - 15 * HOUR),
+    ],
+    dayStart: DAY_START,
+    limits: { maxDailyLossR: 2, maxTradesPerDay: 3, maxOpenPositions: 2 },
+  });
+  assert.equal(guard.netR, 0, "yesterday's R must not count against today");
+  assert.equal(guard.tradesToday, 0);
+  assert.ok(!hasKey(guard.reasons, "guard.stop.dailyLoss"));
+
+  // Tilt is the exception, and deliberately so: three losses in a row an hour
+  // before midnight is the same trader an hour after it.
+  assert.equal(guard.lossStreak, 3);
+  assert.equal(guard.state, "caution");
+  assert.ok(hasKey(guard.reasons, "guard.caution.lossStreak"));
+});
+
+test("trade count and open positions are enforced independently of R", () => {
+  // Both settings existed in the UI and were read by nothing. A limit the app
+  // displays but does not apply is worse than no limit, because the trader
+  // believes something is watching.
+  const overtraded = dailyGuard({
+    trades: [
+      closedTrade(1, DAY_START + HOUR),
+      closedTrade(1, DAY_START + 2 * HOUR),
+      closedTrade(1, DAY_START + 3 * HOUR),
+    ],
+    dayStart: DAY_START,
+    limits: { maxDailyLossR: 2, maxTradesPerDay: 3, maxOpenPositions: 2 },
+  });
+  assert.equal(overtraded.netR, 3, "up on the day");
+  assert.equal(overtraded.state, "stop", "a winning day still ends at the trade cap");
+  assert.equal(overtraded.remainingTrades, 0);
+  assert.ok(hasKey(overtraded.reasons, "guard.stop.tradeCount"));
+
+  const piledUp = dailyGuard({
+    trades: [
+      openTrade(DAY_START + HOUR),
+      openTrade(DAY_START + 2 * HOUR),
+    ],
+    dayStart: DAY_START,
+    limits: { maxDailyLossR: 0, maxTradesPerDay: 0, maxOpenPositions: 2 },
+  });
+  assert.equal(piledUp.openPositions, 2);
+  assert.equal(piledUp.state, "stop");
+  assert.ok(hasKey(piledUp.reasons, "guard.stop.openPositions"));
+  assert.equal(piledUp.remainingR, null, "no loss limit set means no number to report");
+  assert.equal(piledUp.remainingTrades, null);
+});
+
+test("a day nothing has happened on says nothing", () => {
+  // Every limit armed, no trades. An empty morning must produce an empty
+  // banner: a warning shown unconditionally stops being read by the time it
+  // has something to say.
+  const quiet = dailyGuard({
+    trades: [closedTrade(-1, DAY_START - 30 * HOUR, DAY_START - 29 * HOUR)],
+    dayStart: DAY_START,
+    limits: { maxDailyLossR: 2, maxTradesPerDay: 3, maxOpenPositions: 2 },
+  });
+  assert.equal(quiet.state, "clear");
+  assert.deepEqual(quiet.reasons, []);
+
+  const started = dailyGuard({
+    trades: [closedTrade(1, DAY_START + HOUR)],
+    dayStart: DAY_START,
+    limits: { maxDailyLossR: 2, maxTradesPerDay: 3, maxOpenPositions: 2 },
+  });
+  assert.equal(started.state, "clear");
+  const summary = started.reasons.find((r) => r.key === "guard.clear");
+  assert.deepEqual(summary?.vars, { taken: 1, limit: 3, netR: 1 });
 });
 
 test("replay never reveals candles beyond the cursor", () => {

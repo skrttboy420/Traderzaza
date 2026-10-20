@@ -186,6 +186,20 @@ export default function SettingsPage() {
                 className="field num"
               />
             </Field>
+            {/* Set here, while calm. It is enforced on the home and positions
+                screens, where the next trade would otherwise be taken. */}
+            <Field label={t("account.maxDailyLossR")} hint={t("account.maxDailyLossRHint")}>
+              <input
+                type="number"
+                inputMode="decimal"
+                min={0}
+                max={10}
+                step={0.5}
+                value={settings.maxDailyLossR || ""}
+                onChange={(e) => patch({ maxDailyLossR: Number(e.target.value) })}
+                className="field num"
+              />
+            </Field>
           </div>
 
           <div className="mt-3 divide-y divide-[var(--color-border)] border-t border-[var(--color-border)] pt-1">

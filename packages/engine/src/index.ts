@@ -5,6 +5,7 @@ export * from "./zones";
 export * from "./context";
 export * from "./scoring";
 export * from "./risk";
+export * from "./sessions";
 export * from "./setups";
 export * from "./scanner";
 export * from "./psychology";

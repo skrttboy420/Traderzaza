@@ -6,6 +6,7 @@ import { breakEvenDecision, resultR } from "@atc/engine";
 import { DEFAULT_WATCHLIST, getAsset } from "@atc/market-data";
 import { TIMEFRAMES, type Timeframe } from "@atc/types";
 
+import { DailyGuardBanner } from "@/components/DailyGuardBanner";
 import { TopBar } from "@/components/TopBar";
 import { Badge, Bullets, Disclaimer, Empty, Row, SectionTitle, Stat, cx } from "@/components/ui";
 import { directionVisual } from "@/components/visual";
@@ -130,6 +131,10 @@ export default function PositionsPage() {
       <TopBar title={t("positions.title")} />
 
       <main className="space-y-4 p-4">
+        {/* This is the screen where a new position gets added, so it is where
+            the open-position and trade-count limits have to be legible. */}
+        <DailyGuardBanner />
+
         {/* ------------------------------------------------------------------ */}
         {/*  What this screen is. First thing on the page, deliberately.        */}
         {/* ------------------------------------------------------------------ */}

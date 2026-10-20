@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { calculateRisk } from "@atc/engine";
+import { calculateRisk, maxAffordableStop } from "@atc/engine";
 import type { Asset } from "@atc/types";
 
 import { useT } from "@/i18n/provider";
@@ -43,6 +43,14 @@ export function RiskCalculator({
     });
   }, [entry, stop, settings.accountBalance, settings.riskPercent, asset]);
 
+  // Shown before anything is typed, because it is the number that decides
+  // whether to type at all. The calculator can only ever say "this particular
+  // stop does not fit"; this says how much room there is in the first place.
+  const ceiling = useMemo(
+    () => maxAffordableStop(settings.accountBalance, settings.riskPercent, asset),
+    [settings.accountBalance, settings.riskPercent, asset],
+  );
+
   return (
     <section className="card p-4">
       <SectionTitle
@@ -50,6 +58,22 @@ export function RiskCalculator({
         subtitle={`${t("account.balance")}: ${formatMoney(settings.accountBalance, settings.currency)} · ${t("account.riskPercent")}: ${settings.riskPercent}%`}
         hint={settings.smallAccountMode ? t("account.smallAccountHint") : undefined}
       />
+
+      <div className="mb-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2.5">
+        <p className="text-[11px] uppercase tracking-wide text-[var(--color-faint)]">
+          {tt("afford.ceilingTitle")}
+        </p>
+        <p className="mt-1 text-[12px] leading-relaxed text-[var(--color-text)]/90">
+          {ceiling
+            ? tt("afford.ceilingBody", {
+                risk: settings.riskPercent,
+                points: ceiling.points.toLocaleString(),
+                symbol: asset.display,
+                distance: formatPrice(ceiling.distance, asset),
+              })
+            : tt("afford.ceilingNone")}
+        </p>
+      </div>
 
       <div className="grid grid-cols-2 gap-3">
         <label className="block">

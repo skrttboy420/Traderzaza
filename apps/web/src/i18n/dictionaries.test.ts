@@ -4,7 +4,9 @@ import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { DICTIONARIES, LOCALES, NAMESPACES, type DictionaryNode } from "./dictionaries";
+import { LIQUIDITY_LEVELS, SESSIONS } from "@atc/engine";
+
+import { DICTIONARIES, LOCALES, NAMESPACES, lookup, type DictionaryNode } from "./dictionaries";
 
 /**
  * Parity guard for the two locale trees.
@@ -81,6 +83,53 @@ test("a key interpolates the same variables in both locales", () => {
         placeholders(stringAt(th, path)),
         placeholders(stringAt(en, path)),
         `${namespace}.${path}: placeholders differ between locales`,
+      );
+    }
+  }
+});
+
+test("every placeholder is written in the form interpolate actually substitutes", () => {
+  // `interpolate` replaces `{{name}}` and nothing else. A string written with
+  // single braces type-checks, passes the parity test above (both locales are
+  // equally wrong), and ships `{points}` to the screen as literal text. The
+  // failure is invisible to every other guard here precisely because it is
+  // symmetric, so it has to be checked against the substitution rule itself.
+  const single = /(?<!\{)\{(\w+)\}(?!\})/;
+  for (const locale of LOCALES) {
+    for (const namespace of NAMESPACES) {
+      const dict = DICTIONARIES[locale][namespace];
+      for (const path of flatten(dict)) {
+        const value = stringAt(dict, path);
+        const found = single.exec(value);
+        assert.equal(
+          found,
+          null,
+          `${locale}/${namespace}.${path}: "${found?.[0]}" will never be substituted — write {{${found?.[1]}}}`,
+        );
+      }
+    }
+  }
+});
+
+test("the dictionary names every session and liquidity level the engine can emit", () => {
+  // SessionStrip builds its keys as `session.name.${id}` and
+  // `session.liquidity.${level}`. A key assembled at runtime is a key the
+  // compiler cannot check and the parity test cannot miss, because a level
+  // absent from both locales is absent symmetrically.
+  for (const locale of LOCALES) {
+    const trading = DICTIONARIES[locale].trading;
+    for (const id of SESSIONS) {
+      assert.equal(
+        typeof lookup(trading, `session.name.${id}`),
+        "string",
+        `${locale}: session.name.${id} is missing`,
+      );
+    }
+    for (const level of LIQUIDITY_LEVELS) {
+      assert.equal(
+        typeof lookup(trading, `session.liquidity.${level}`),
+        "string",
+        `${locale}: session.liquidity.${level} is missing`,
       );
     }
   }

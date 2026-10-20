@@ -16,6 +16,14 @@ export interface UserSettings {
   smallAccountMode: boolean;
   maxTradesPerDay: number;
   maxOpenPositions: number;
+  /**
+   * R lost in one day that ends the day. 0 turns the brake off.
+   *
+   * Expressed in R rather than money or percent so it survives the account
+   * growing: "two stops" means the same thing at $300 and at $3,000, while
+   * "$20" silently becomes a tighter and tighter leash.
+   */
+  maxDailyLossR: number;
   watchlist: string[];
   entryTimeframe: Timeframe;
   coachMode: CoachMode;
@@ -40,6 +48,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   smallAccountMode: true,
   maxTradesPerDay: 3,
   maxOpenPositions: 2,
+  maxDailyLossR: 2,
   watchlist: ["XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "BTCUSDT", "ETHUSDT"],
   entryTimeframe: "15m",
   coachMode: "coach",

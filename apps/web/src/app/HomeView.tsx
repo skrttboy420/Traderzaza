@@ -3,8 +3,11 @@
 import Link from "next/link";
 import { useMemo } from "react";
 
+import { DailyGuardBanner } from "@/components/DailyGuardBanner";
 import { DataStatusBadge } from "@/components/DataStatusBadge";
+import { ExpectancyStrip } from "@/components/ExpectancyStrip";
 import { NewsRiskStrip } from "@/components/NewsPanel";
+import { SessionStrip } from "@/components/SessionStrip";
 import { SetupCard } from "@/components/SetupCard";
 import { TopBar } from "@/components/TopBar";
 import { Badge, Disclaimer, Empty, FeedFailure, SectionTitle, cx } from "@/components/ui";
@@ -44,6 +47,16 @@ export function HomeView({ data }: { data: HomeData }) {
       <TopBar />
 
       <main className="space-y-4 p-4">
+        {/* Above the opportunity list on purpose. The list is an invitation to
+            trade; if the day is already spent, that has to be read first. */}
+        <DailyGuardBanner />
+        <ExpectancyStrip />
+
+        {/* Last thing before the list, because it is the lens the list is read
+            through. The scan grades structure; the hour decides how much that
+            grade is worth. */}
+        <SessionStrip />
+
         <section>
           <SectionTitle
             title={t("dashboard.title")}
