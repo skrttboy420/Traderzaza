@@ -1,14 +1,11 @@
 import type { Candle, DataQuality, DataStatus, Timeframe } from "@atc/types";
 
-export const TIMEFRAME_SECONDS: Record<Timeframe, number> = {
-  "1m": 60,
-  "5m": 300,
-  "15m": 900,
-  "30m": 1800,
-  "1h": 3600,
-  "4h": 14400,
-  "1d": 86400,
-};
+/**
+ * Re-exported from `@atc/types`, where it moved so the engine can use it too.
+ * Kept here because every provider in this package already imports it from
+ * `./types`, and a re-export is cheaper than touching all of them.
+ */
+export { TIMEFRAME_SECONDS } from "@atc/types";
 
 export interface CandleRequest {
   symbol: string;
@@ -41,6 +38,16 @@ export interface CandleResponse {
 export interface MarketDataProvider {
   readonly name: string;
   readonly quality: DataQuality;
+  /**
+   * Whether a call to this provider spends a metered allowance.
+   *
+   * Required rather than optional on purpose. The refresh control prices a scan
+   * before the user presses it, and a provider that quietly costs money while
+   * reporting nothing would turn that number into a lie — the one failure mode
+   * the whole feature exists to prevent. Making it mandatory means a new
+   * provider cannot be added without someone answering the question.
+   */
+  readonly metered: boolean;
   supports(symbol: string): boolean;
   fetchCandles(request: CandleRequest): Promise<CandleResponse>;
   /** Optional live stream. Providers without one return null and the UI polls. */

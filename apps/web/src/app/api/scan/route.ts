@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { DEFAULT_WATCHLIST, getAsset } from "@atc/market-data";
+import { getAsset } from "@atc/market-data";
 import type { Timeframe } from "@atc/types";
 import { TIMEFRAMES } from "@atc/types";
 
-import { scanWatchlist } from "@/lib/scan";
+import { scanWatchlist, serverWatchlist } from "@/lib/scan";
 
 export const dynamic = "force-dynamic";
 // A watchlist scan fans out to several timeframes across several markets, and
@@ -27,7 +27,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: `unknown timeframe: ${timeframe}` }, { status: 400 });
   }
 
-  let symbols = DEFAULT_WATCHLIST;
+  // No `symbols` parameter means "whatever the user is watching", which is the
+  // cookie the screens render from — not the full catalogue. Otherwise the API
+  // and the dashboard would answer the same question differently, and the API
+  // would quietly spend credits on markets the user removed.
+  let symbols = await serverWatchlist();
   if (raw) {
     const requested = raw
       .split(",")

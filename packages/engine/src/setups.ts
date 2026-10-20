@@ -22,6 +22,10 @@ import { atrAt, clamp, round } from "./indicators";
 import { TREND_DIRECTION, readStructure } from "./structure";
 import { buildMtfAlignment, classifyPullback, detectRegime, regimeNote } from "./context";
 import { detectZones, priceInZone, zoneDistanceAtr, zoneFacts, zoneMid } from "./zones";
+import type { KeyLevel, ZoneConfluence } from "./levels";
+import { detectKeyLevels, levelPhrase, levelsInPath, zoneConfluence } from "./levels";
+import type { DollarAlignment, DollarContext } from "./dollar";
+import { buildDollarContext, dollarAlignment, dollarMovePhrase } from "./dollar";
 import { analysisConfidence, scoreSetup } from "./scoring";
 import { structuralStop } from "./risk";
 import {
@@ -45,6 +49,13 @@ export interface AnalysisInput {
   entryTimeframe?: Timeframe;
   dataStatus: DataStatus;
   now?: number;
+  /**
+   * Higher-timeframe series for *other* symbols, keyed by symbol. Only the
+   * dollar-basket pairs are read, and only their 4H chains. Omitting it costs
+   * nothing but the dollar component — see `dollar.ts` for why the caller has
+   * to supply these rather than the engine fetching them.
+   */
+  peers?: Partial<Record<string, Candle[]>>;
 }
 
 export interface AnalysisResult {
@@ -62,6 +73,10 @@ export interface AnalysisResult {
   dataStatus: DataStatus;
   /** Populated when the engine refuses to produce a tradable setup. */
   noTradeReasons: Phrase[];
+  /** HTF reference prices aggregated from the loaded series. Empty without a 4H/1H chain. */
+  keyLevels: KeyLevel[];
+  /** The dollar backdrop, or null when no peer series were supplied. */
+  dollar: DollarContext | null;
 }
 
 const MAX_SETUPS = 3;
@@ -99,6 +114,16 @@ export function analyze(input: AnalysisInput): AnalysisResult {
 
   const zones = collectZones(input, readings, htfTrend, entryTimeframe);
 
+  // Key levels come from the 4H chain the scanner already paid for, so they
+  // cost nothing extra. 1H is the fallback: 400 1H bars is still 16 days, which
+  // is enough for a previous day and a previous week, just a coarser daily ATR.
+  const levelSource = input.candles["4h"] ?? input.candles["1h"] ?? [];
+  const keyLevels = levelSource.length > 0 ? detectKeyLevels(levelSource, { price }) : [];
+
+  // The symbol's own leg is excluded so a EURUSD setup is never graded against
+  // an index EURUSD is 58% of.
+  const dollar = input.peers ? buildDollarContext(input.peers, { exclude: symbol }) : null;
+
   const noTradeReasons = detectNoTrade({
     entryCandles,
     htfDirection,
@@ -130,6 +155,8 @@ export function analyze(input: AnalysisInput): AnalysisResult {
       dataStatus: input.dataStatus,
       now,
       blockingReasons: noTradeReasons,
+      keyLevels,
+      dollar,
     });
     setups.push(setup);
   }
@@ -170,6 +197,8 @@ export function analyze(input: AnalysisInput): AnalysisResult {
     best,
     dataStatus: input.dataStatus,
     noTradeReasons,
+    keyLevels,
+    dollar,
   };
 }
 
@@ -306,6 +335,8 @@ interface BuildSetupInput {
   dataStatus: DataStatus;
   now: number;
   blockingReasons: Phrase[];
+  keyLevels: KeyLevel[];
+  dollar: DollarContext | null;
 }
 
 function buildSetup(input: BuildSetupInput): Setup {
@@ -353,6 +384,14 @@ function buildSetup(input: BuildSetupInput): Setup {
     atrValue,
   });
 
+  // Proximity is measured in entry-timeframe ATR because that is the unit the
+  // zone's own width is expressed in; a level "half an ATR away" has to mean
+  // half an ATR of the chart the zone was drawn on.
+  const confluence =
+    input.keyLevels.length > 0 ? zoneConfluence(zone, input.keyLevels, atrValue) : null;
+
+  const dollarRead = dollarAlignment(asset.symbol, direction, input.dollar);
+
   const quality = scoreSetup({
     zone,
     htfTrend,
@@ -362,7 +401,17 @@ function buildSetup(input: BuildSetupInput): Setup {
     riskReward: plans.reduce((max, plan) => Math.max(max, plan.riskReward), 0),
     pendingConfirmations: confirmation.pending.length,
     direction: direction === "long" ? "long" : "short",
+    confluence,
+    dollar: dollarRead,
   });
+
+  // The first target is the one R:R is quoted against, so it is the only one
+  // worth warning about. Measured from the planned entry area, matching how
+  // `buildTargets` anchors and how `makePlan` measures risk.
+  const firstTarget = targets[0];
+  const blockers = firstTarget
+    ? levelsInPath(zoneMid(zone), firstTarget.price, input.keyLevels)
+    : [];
 
   const aiConfidence = analysisConfidence({
     dataStatus: input.dataStatus,
@@ -389,6 +438,8 @@ function buildSetup(input: BuildSetupInput): Setup {
     ...entryStructure.facts,
     ...zoneFacts(zone),
     p("setup.fact.distance", { distance }),
+    ...(confluence ? confluence.facts : []),
+    ...(input.dollar ? input.dollar.facts : []),
     ...confirmation.facts,
     p("setup.fact.quality", { score: quality.score, grade: quality.grade }),
     p("setup.fact.confidence", { confidence: aiConfidence }),
@@ -420,7 +471,17 @@ function buildSetup(input: BuildSetupInput): Setup {
     assumptions.push(p("setup.assume.dataNotLive", { quality: input.dataStatus.quality }));
   }
 
-  const whyEnter = buildWhyEnter({ direction, zone, htfTrend, quality: quality.score, confirmation, targets });
+  const whyEnter = buildWhyEnter({
+    direction,
+    zone,
+    htfTrend,
+    quality: quality.score,
+    confirmation,
+    targets,
+    confluence,
+    dollar: input.dollar,
+    dollarRead,
+  });
   const whyWait = buildWhyWait({
     confirmation,
     status,
@@ -429,6 +490,9 @@ function buildSetup(input: BuildSetupInput): Setup {
     mtf: input.mtf,
     regime: input.regime,
     blockingReasons: input.blockingReasons,
+    blockers,
+    dollar: input.dollar,
+    dollarRead,
   });
 
   const invalidation = buildInvalidation({ direction, zone, distal, entryStructure, tick, atrValue });
@@ -805,8 +869,12 @@ function buildWhyEnter(params: {
   quality: number;
   confirmation: ConfirmationState;
   targets: { label: string; reason: Phrase }[];
+  confluence: ZoneConfluence | null;
+  dollar: DollarContext | null;
+  dollarRead: DollarAlignment | null;
 }): Phrase[] {
-  const { direction, zone, htfTrend, quality, confirmation, targets } = params;
+  const { direction, zone, htfTrend, quality, confirmation, targets, confluence, dollar, dollarRead } =
+    params;
   const out: Phrase[] = [];
 
   out.push(
@@ -829,6 +897,25 @@ function buildWhyEnter(params: {
     out.push(p("setup.enter.trackRecord", { impact: impactPhrase(zone.structuralImpact) }));
   }
   if (zone.htfAligned) out.push(p("setup.enter.htfAligned"));
+  // Only the strongest level is argued here. The full list is in `facts`, and
+  // a reasons panel that lists four near-identical lines reads as padding.
+  const strongestLevel = confluence?.levels[0];
+  if (strongestLevel) {
+    out.push(
+      p("setup.enter.levelConfluence", {
+        level: levelPhrase(strongestLevel.kind),
+        price: strongestLevel.price,
+      }),
+    );
+  }
+  if (dollar && dollarRead?.stance === "tailwind") {
+    out.push(
+      p("setup.enter.dollarTailwind", {
+        move: dollarMovePhrase(dollar.move),
+        conviction: dollarRead.conviction,
+      }),
+    );
+  }
   for (const m of confirmation.met) out.push(m);
   const first = targets[0];
   if (first) out.push(p("setup.enter.hasTarget", { reason: first.reason }));
@@ -845,8 +932,12 @@ function buildWhyWait(params: {
   mtf: MtfAlignment;
   regime: MarketRegime;
   blockingReasons: Phrase[];
+  blockers: KeyLevel[];
+  dollar: DollarContext | null;
+  dollarRead: DollarAlignment | null;
 }): Phrase[] {
-  const { confirmation, status, distance, pullback, mtf, regime, blockingReasons } = params;
+  const { confirmation, status, distance, pullback, mtf, regime, blockingReasons, blockers, dollar, dollarRead } =
+    params;
   const out: Phrase[] = [];
 
   if (status === "WATCHING" || status === "ZONE_APPROACHING") {
@@ -862,6 +953,25 @@ function buildWhyWait(params: {
     );
   }
   if (mtf.conflict) out.push(p("setup.wait.conflict", { conflict: mtf.conflict }));
+  if (dollar && dollarRead?.stance === "headwind") {
+    out.push(
+      p("setup.wait.dollarHeadwind", {
+        move: dollarMovePhrase(dollar.move),
+        conviction: dollarRead.conviction,
+      }),
+    );
+  }
+  // Nearest obstacle only: the one price meets first is the one that decides
+  // whether the quoted R:R survives contact.
+  const nearestBlocker = blockers[0];
+  if (nearestBlocker) {
+    out.push(
+      p("setup.wait.levelInPath", {
+        level: levelPhrase(nearestBlocker.kind),
+        price: nearestBlocker.price,
+      }),
+    );
+  }
   // regimeNote is total over MarketRegime, so there is nothing to guard against.
   out.push(regimeNote(regime));
   for (const r of blockingReasons) out.push(r);

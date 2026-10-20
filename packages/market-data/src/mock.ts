@@ -133,6 +133,8 @@ export function generateCandles(request: CandleRequest, options: MockOptions = {
 export class MockMarketDataProvider implements MarketDataProvider {
   readonly name = "mock";
   readonly quality = "DEMO" as const;
+  /** Generated in process; there is nothing to spend. */
+  readonly metered = false;
   private readonly options: MockOptions;
 
   constructor(options: MockOptions = {}) {

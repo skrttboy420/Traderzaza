@@ -12,7 +12,7 @@
     "lint": "pnpm --filter @atc/web lint",
     "typecheck": "tsc -p tsconfig.check.json --noEmit && pnpm typecheck:web",
     "typecheck:web": "pnpm --filter @atc/web exec tsc -p tsconfig.json --noEmit",
-    "test": "tsx packages/engine/src/engine.test.ts && tsx packages/engine/src/scoring.test.ts && tsx packages/ai/src/schema.test.ts && tsx packages/market-data/src/mock.test.ts && tsx packages/market-data/src/quota.test.ts && tsx packages/market-data/src/twelvedata.test.ts && tsx packages/news/src/news.test.ts && tsx apps/web/src/app/theme.test.ts && tsx apps/web/src/lib/supabase.test.ts && tsx apps/web/src/lib/signal.test.ts && tsx apps/web/src/i18n/dictionaries.test.ts",
+    "test": "tsx packages/engine/src/engine.test.ts && tsx packages/engine/src/scoring.test.ts && tsx packages/engine/src/levels.test.ts && tsx packages/engine/src/dollar.test.ts && tsx packages/engine/src/backtest.test.ts && tsx packages/ai/src/schema.test.ts && tsx packages/market-data/src/mock.test.ts && tsx packages/market-data/src/quota.test.ts && tsx packages/market-data/src/twelvedata.test.ts && tsx packages/news/src/news.test.ts && tsx apps/web/src/app/theme.test.ts && tsx apps/web/src/lib/supabase.test.ts && tsx apps/web/src/lib/signal.test.ts && tsx apps/web/src/lib/watchlist.test.ts && tsx apps/web/src/lib/scan-cost.test.ts &&tsx apps/web/src/i18n/dictionaries.test.ts",
     "verify": "pnpm typecheck && pnpm test"
   },
   "devDependencies": {

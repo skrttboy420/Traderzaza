@@ -21,6 +21,8 @@ const SUPPORTED = new Set(["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT"
 export class BinanceMarketDataProvider implements MarketDataProvider {
   readonly name = "binance";
   readonly quality = "LIVE" as const;
+  /** Keyless public endpoint; the weight limits sit far above this app's use. */
+  readonly metered = false;
   private readonly baseUrl: string;
 
   constructor(baseUrl = "https://api.binance.com") {

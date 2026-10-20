@@ -238,6 +238,7 @@ async function run(): Promise<void> {
   const broken = {
     name: "broken",
     quality: "LIVE" as const,
+    metered: false,
     supports: () => true,
     fetchCandles: async () => {
       throw new Error("network down");
@@ -254,6 +255,7 @@ async function run(): Promise<void> {
   const live = {
     name: "live-4h",
     quality: "LIVE" as const,
+    metered: false,
     supports: () => true,
     fetchCandles: async () => {
       const candles = generateCandles({ symbol: "BTCUSDT", timeframe: "4h", limit: 60 });

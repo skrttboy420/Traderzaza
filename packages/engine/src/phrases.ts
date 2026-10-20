@@ -139,6 +139,56 @@ export const PHRASES = {
   "label.side.aligned": { en: "aligned", th: "สอดคล้องกัน" },
   "label.side.notAligned": { en: "not aligned", th: "ยังไม่สอดคล้อง" },
 
+  /**
+   * Key levels. All seven must be NOUN PHRASES — every slot they fill names a
+   * thing sitting at a price ("{level} sits at {price}", "มี{level} ขวางอยู่").
+   * They also must not open with the words the templates already supply, or
+   * the doubling test in engine.test.ts will catch them.
+   */
+  "label.level.prevDayHigh": { en: "the previous day's high", th: "ไฮของเมื่อวาน" },
+  "label.level.prevDayLow": { en: "the previous day's low", th: "โลว์ของเมื่อวาน" },
+  "label.level.prevDayClose": { en: "the previous day's close", th: "ราคาปิดของเมื่อวาน" },
+  "label.level.prevWeekHigh": { en: "last week's high", th: "ไฮของสัปดาห์ที่แล้ว" },
+  "label.level.prevWeekLow": { en: "last week's low", th: "โลว์ของสัปดาห์ที่แล้ว" },
+  "label.level.weekOpen": { en: "this week's open", th: "ราคาเปิดของสัปดาห์นี้" },
+  "label.level.round": { en: "a round number", th: "เลขกลม (Round Number)" },
+
+  /**
+   * Dollar backdrop. `label.move.*` fills "the dollar is {move}" and must read
+   * as a state, not a noun; `label.stance.*` fills "a {stance} for this
+   * direction" and must be the noun.
+   */
+  "label.move.strengthening": { en: "strengthening", th: "แข็งค่าขึ้น" },
+  "label.move.weakening": { en: "weakening", th: "อ่อนค่าลง" },
+  "label.move.flat": { en: "going nowhere", th: "ทรงตัว" },
+  "label.stance.tailwind": { en: "tailwind", th: "แรงหนุน" },
+  "label.stance.headwind": { en: "headwind", th: "แรงต้าน" },
+  "label.stance.neutral": { en: "non-factor", th: "ปัจจัยที่ไม่มีผล" },
+
+  // ----------------------------------------------------------- key levels
+  "level.fact.near": {
+    en: "{level} sits at {price}, {distance} ATR from the zone.",
+    th: "{level} อยู่ที่ {price} ห่างจากโซน {distance} ATR",
+  },
+  "level.fact.none": {
+    en: "No higher-timeframe key level is near this zone.",
+    th: "ไม่มีแนวสำคัญจากไทม์เฟรมใหญ่อยู่ใกล้โซนนี้",
+  },
+
+  // -------------------------------------------------------- dollar backdrop
+  "dollar.fact.move": {
+    en: "The dollar is {move} over the last five days: {strength}/100, with {agreement}% agreement across {count} pairs.",
+    th: "ดอลลาร์กำลัง{move}ในรอบห้าวัน: ความแรง {strength}/100 คู่เงินเห็นตรงกัน {agreement}% จาก {count} คู่",
+  },
+  "dollar.fact.leader": {
+    en: "{symbol} is driving it, {changePct}% over the window.",
+    th: "ตัวขับหลักคือ {symbol} เคลื่อนไหว {changePct}% ในช่วงนี้",
+  },
+  "dollar.fact.flat": {
+    en: "The dollar has gone nowhere over the last five days across {count} pairs, so it is not an argument either way.",
+    th: "ดอลลาร์ทรงตัวตลอดห้าวันที่ผ่านมาจาก {count} คู่เงิน จึงไม่ใช่เหตุผลสนับสนุนหรือค้านทางไหน",
+  },
+
   // ------------------------------------------------------------- structure
   "structure.swingSequence": {
     en: "{tf}: swing sequence {sequence}.",
@@ -301,6 +351,8 @@ export const PHRASES = {
   "score.label.confirmation": { en: "Confirmation present", th: "มีสัญญาณยืนยันแล้ว" },
   "score.label.riskReward": { en: "Risk / reward", th: "ความคุ้มค่า (R:R)" },
   "score.label.regime": { en: "Regime fit", th: "เข้ากับสภาพตลาด" },
+  "score.label.confluence": { en: "Key-level confluence", th: "ทับกับแนวสำคัญ" },
+  "score.label.dollar": { en: "Dollar backdrop", th: "ภาพรวมค่าเงินดอลลาร์" },
 
   "score.note.zone": {
     en: "{kind} zone, {freshness}, reaction strength {strength}/100.",
@@ -337,6 +389,18 @@ export const PHRASES = {
   "score.note.regime": {
     en: "Market regime is {regime}.",
     th: "สภาพตลาดตอนนี้คือ{regime}",
+  },
+  "score.note.confluence": {
+    en: "The zone lines up with {level} at {price}.",
+    th: "โซนนี้ทับกับ{level} ที่ราคา {price}",
+  },
+  "score.note.noConfluence": {
+    en: "No higher-timeframe key level reinforces this zone.",
+    th: "ยังไม่มีแนวสำคัญจากไทม์เฟรมใหญ่มาช่วยยืนยันโซนนี้",
+  },
+  "score.note.dollar": {
+    en: "The dollar is a {stance} for this direction, at {conviction}/100 conviction.",
+    th: "ทิศทางของดอลลาร์เป็น{stance}ของเทรดนี้ ที่น้ำหนัก {conviction}/100",
   },
 
   // --------------------------------------------------------------- noTrade
@@ -484,6 +548,14 @@ export const PHRASES = {
     en: "The plan is concrete: {entryType}, entry {low} to {high}, stop {stop}, {rr}R to the first target.",
     th: "แผนชัดเจน: {entryType} โซนเข้า {low} ถึง {high} SL {stop} และได้ {rr}R ถึงเป้าแรก",
   },
+  "setup.enter.levelConfluence": {
+    en: "The zone lands on {level} at {price}, a reference the rest of the market is already marking.",
+    th: "โซนนี้ไปตรงกับ{level} ที่ราคา {price} ซึ่งเป็นแนวที่คนทั้งตลาดมองเหมือนกัน",
+  },
+  "setup.enter.dollarTailwind": {
+    en: "The dollar is {move} and this trade is positioned for that, at {conviction}/100 conviction.",
+    th: "ดอลลาร์กำลัง{move} และเทรดนี้อยู่ฝั่งเดียวกับมัน ที่น้ำหนัก {conviction}/100",
+  },
   "setup.enter.score": {
     en: "Setup Quality Score is {score}/100 — a grade for how well this matches the plan, not a forecast of the outcome.",
     th: "คะแนนคุณภาพ {score}/100 — เป็นคะแนนว่าตรงกับแผนแค่ไหน ไม่ใช่การทำนายผล",
@@ -505,6 +577,14 @@ export const PHRASES = {
   "setup.wait.conflict": {
     en: "Timeframe conflict: {conflict}",
     th: "ไทม์เฟรมขัดกัน: {conflict}",
+  },
+  "setup.wait.levelInPath": {
+    en: "{level} sits at {price}, between the entry and the first target. Expect the move to stall there.",
+    th: "มี{level} ที่ราคา {price} ขวางอยู่ระหว่างจุดเข้ากับเป้าแรก ให้เผื่อใจว่าราคาจะไปหยุดตรงนั้น",
+  },
+  "setup.wait.dollarHeadwind": {
+    en: "The dollar is {move} at {conviction}/100 conviction, which works against this direction. Size for a slower move.",
+    th: "ดอลลาร์กำลัง{move} ที่น้ำหนัก {conviction}/100 ซึ่งสวนทางกับเทรดนี้ ให้เผื่อใจว่าราคาจะวิ่งช้ากว่าปกติ",
   },
   "setup.wait.nothingOutstanding": {
     en: "Nothing is outstanding on the chart. The remaining reason to wait is your own risk state, not the setup.",

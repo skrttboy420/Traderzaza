@@ -115,6 +115,8 @@ function toApiDate(unixSeconds: number): string {
 export class TwelveDataProvider implements MarketDataProvider {
   readonly name = "twelvedata";
   readonly quality: "LIVE" | "DELAYED";
+  /** The only feed here that can run out. One `time_series` call, one credit. */
+  readonly metered = true;
   readonly budget: CreditBudget;
   private readonly apiKey: string;
   private readonly baseUrl: string;

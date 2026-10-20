@@ -10,6 +10,10 @@ import type {
 } from "@atc/types";
 import { clamp } from "./indicators";
 import { TREND_DIRECTION } from "./structure";
+import type { ZoneConfluence } from "./levels";
+import { levelPhrase } from "./levels";
+import type { DollarAlignment } from "./dollar";
+import { dollarStancePhrase } from "./dollar";
 import {
   directionPhrase,
   freshnessPhrase,
@@ -31,8 +35,32 @@ export interface QualityInput {
   /** Count of confirmation conditions still outstanding. */
   pendingConfirmations: number;
   direction: "long" | "short" | "none";
+  /**
+   * Higher-timeframe key levels backing the zone. Optional: callers that have
+   * no HTF series to aggregate from simply omit it and the component is not
+   * scored at all, rather than being scored zero.
+   */
+  confluence?: ZoneConfluence | null;
+  /**
+   * How the dollar backdrop reads against this direction. Optional for the
+   * same reason as `confluence`: an instrument with no dollar leg, or a caller
+   * with no peer series, gets the component left out rather than scored.
+   */
+  dollar?: DollarAlignment | null;
 }
 
+/**
+ * Raw component weights.
+ *
+ * The first seven sum to exactly 1.00 and are the original scoring model.
+ * `confluence` and `dollar` are additive on top, and `scoreSetup` renormalises
+ * the whole set when either is present — see the comment on `normaliseWeights`
+ * for why that matters.
+ *
+ * Both extras are deliberately the smallest weight in the model. They are
+ * context that tilts a decision, not a reason to take a trade: neither a round
+ * number nor a dollar week should ever outvote the zone the setup is built on.
+ */
 const WEIGHTS = {
   zone: 0.25,
   htf: 0.2,
@@ -41,6 +69,8 @@ const WEIGHTS = {
   confirmation: 0.1,
   riskReward: 0.1,
   regime: 0.05,
+  confluence: 0.05,
+  dollar: 0.05,
 } as const;
 
 /**
@@ -143,9 +173,89 @@ export function scoreSetup(input: QualityInput): SetupQuality {
     note: p("score.note.regime", { regime: regimePhrase(input.regime) }),
   });
 
+  const confluence = input.confluence;
+  if (confluence) {
+    const strongest = confluence.levels[0];
+    components.push({
+      key: "confluence",
+      label: p("score.label.confluence"),
+      weight: WEIGHTS.confluence,
+      score: confluence.score,
+      note: strongest
+        ? p("score.note.confluence", {
+            level: levelPhrase(strongest.kind),
+            price: strongest.price,
+          })
+        : p("score.note.noConfluence"),
+    });
+  }
+
+  const dollar = input.dollar;
+  if (dollar) {
+    components.push({
+      key: "dollar",
+      label: p("score.label.dollar"),
+      weight: WEIGHTS.dollar,
+      score: dollar.score,
+      note: p("score.note.dollar", {
+        stance: dollarStancePhrase(dollar.stance),
+        conviction: dollar.conviction,
+      }),
+    });
+  }
+
+  normaliseWeights(components);
+
   const raw = components.reduce((sum, c) => sum + c.weight * c.score, 0);
   const score = clamp(Math.round(raw), 0, 100);
   return { score, grade: gradeOf(score), components };
+}
+
+/**
+ * Rescale component weights so they sum to 1.
+ *
+ * `ScoreComponent` documents that invariant, the UI prints each weight as a
+ * percentage, and the score is the weighted mean — so a component bolted on
+ * after the fact must *dilute* the others, not inflate the total. Without this,
+ * adding `confluence` at 0.05 would have quietly moved an 80-point A-grade
+ * threshold to 76 points of the old model plus a free 5, and every historical
+ * grade in the journal would mean something different from the new ones.
+ *
+ * Mutating in place is deliberate: the components were just built here and
+ * nothing else holds a reference yet.
+ *
+ * The shares are apportioned in whole percentage points by largest remainder,
+ * not simply divided. `ScoreBreakdown` prints `Math.round(weight * 100)%` per
+ * row, and the eight shares of 1/1.05 each round *up* to a set totalling 101% —
+ * a breakdown that visibly does not add up undermines the one number it is
+ * there to explain.
+ * Rounding first and scoring from the rounded weights also means the
+ * percentages on screen *are* the arithmetic that ran, rather than an
+ * approximation of it.
+ *
+ * Ties go to the earlier component, which is arbitrary but deterministic: two
+ * equal raw weights cannot both get the spare point.
+ */
+function normaliseWeights(components: ScoreComponent[]): void {
+  const total = components.reduce((sum, c) => sum + c.weight, 0);
+  if (total <= 0 || Math.abs(total - 1) < 1e-9) return;
+
+  const exact = components.map((c) => (c.weight / total) * 100);
+  const points = exact.map((v) => Math.floor(v));
+  let spare = 100 - points.reduce((sum, v) => sum + v, 0);
+
+  const byRemainder = exact
+    .map((v, index) => ({ index, remainder: v - Math.floor(v) }))
+    .sort((a, b) => b.remainder - a.remainder);
+  for (const entry of byRemainder) {
+    if (spare <= 0) break;
+    points[entry.index] = (points[entry.index] ?? 0) + 1;
+    spare -= 1;
+  }
+
+  components.forEach((component, index) => {
+    component.weight = (points[index] ?? 0) / 100;
+  });
 }
 
 function trendScore(trend: TrendState): number {

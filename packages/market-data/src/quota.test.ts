@@ -46,6 +46,8 @@ function candles(close: number): Candle[] {
 class CountingProvider implements MarketDataProvider {
   readonly name = "counting";
   readonly quality = "LIVE" as const;
+  /** Mutable so the cost tests can price the same provider both ways. */
+  metered = false;
   calls = 0;
   fail = false;
   price = 100;
@@ -228,6 +230,7 @@ async function run(): Promise<void> {
     const provider: MarketDataProvider = {
       name: "mock",
       quality: "DEMO",
+      metered: false,
       supports: () => true,
       fetchCandles: async () => {
         if (fail) throw new Error("feed down");
@@ -254,6 +257,70 @@ async function run(): Promise<void> {
       "synthetic prices must never be described as real ones",
     );
     assert.notEqual(after.candles[0]?.close, marker, "the marker price would prove DEMO was cached");
+  });
+
+  await testAsync("the quoted price drops to zero once the cache can answer", async () => {
+    // The number shown next to the refresh button. A flat per-symbol price
+    // would be wrong most of the time, because inside the TTL the scan reaches
+    // no provider at all — and quoting four credits for a free press teaches
+    // the trader to ignore the number.
+    const provider = new CountingProvider();
+    provider.metered = true;
+    const service = new ClockedService([provider]);
+    const plan = [{ symbol: "XAUUSD", timeframes: [...MTF_CHAIN] }];
+
+    const cold = service.estimateCost(plan, 100);
+    assert.equal(cold.total, 4, "a cold chain costs one credit per bar");
+    assert.equal(cold.perSymbol[0]?.cached, 0);
+
+    for (const timeframe of MTF_CHAIN) {
+      await service.getCandles({ symbol: "XAUUSD", timeframe, limit: 100 });
+    }
+
+    const warm = service.estimateCost(plan, 100);
+    assert.equal(warm.total, 0, "a scan the cache can answer costs nothing");
+    assert.equal(warm.perSymbol[0]?.cached, 4);
+    // ...but it is not free forever, and saying so is the honest version.
+    assert.equal(warm.fullTotal, 4, "the cold-cache price must still be reported");
+
+    // The 5M entry expires first, so the price comes back one bar at a time
+    // rather than all at once — which is why the estimate is per series.
+    service.clock += candleTtlSeconds("5m") + 1;
+    assert.equal(service.estimateCost(plan, 100).total, 1, "only the lapsed bar is chargeable");
+  });
+
+  await testAsync("a keyless feed is quoted at nothing however many bars it loads", async () => {
+    // Yahoo and Binance cover everything in the watchlist except gold. If the
+    // estimate counted requests rather than credits it would tell the user that
+    // refreshing bitcoin costs four, and the obvious saving — untick gold —
+    // would look like no saving at all.
+    const free = new CountingProvider();
+    const service = new ClockedService([free]);
+
+    const cost = service.estimateCost([{ symbol: "BTCUSDT", timeframes: [...MTF_CHAIN] }], 100);
+    assert.equal(cost.perSymbol[0]?.requests, 4, "the bars are still loaded");
+    assert.equal(cost.total, 0, "they are just not charged for");
+    assert.equal(cost.fullTotal, 0, "nor will they be when the cache lapses");
+  });
+
+  await testAsync("a series two parts of the plan both want is priced once", async () => {
+    // The dollar basket asks for EURUSD/GBPUSD/USDJPY at 4H, and those three
+    // are in the watchlist already. Pricing the overlap twice would invent a
+    // credit that is never spent, in the one number the user checks before
+    // deciding whether they can afford to press.
+    const provider = new CountingProvider();
+    provider.metered = true;
+    const service = new ClockedService([provider]);
+
+    const cost = service.estimateCost(
+      [
+        { symbol: "EURUSD", timeframes: [...MTF_CHAIN] },
+        { symbol: "EURUSD", timeframes: ["4h"] },
+      ],
+      100,
+    );
+    assert.equal(cost.perSymbol.length, 1, "one symbol, one row");
+    assert.equal(cost.total, MTF_CHAIN.length, "the shared 4H bar is not charged twice");
   });
 
   await testAsync("a windowed request does not return the live series from cache", async () => {

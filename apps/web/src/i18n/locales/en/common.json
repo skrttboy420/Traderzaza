@@ -39,6 +39,18 @@
     "copy": "Copy",
     "retry": "Retry"
   },
+  "refreshCost": {
+    "pickerLabel": "Choose which markets to refresh, and see what it costs first",
+    "title": "Refresh which markets",
+    "subtitle": "Only the metered feed costs anything. Untick a market you do not trade and you stop paying for it on every scan.",
+    "free": "free",
+    "total": "{{now}} credits now · {{full}} once the candles age",
+    "cachedNote": "The candles on screen are still fresh, so this press re-runs the analysis without fetching anything. The second number is what the same press costs after they expire.",
+    "coldNote": "The candles have aged out, so this press fetches new ones and spends the credits above.",
+    "quota": "Spent: {{minuteUsed}}/{{minuteLimit}} this minute · {{dayUsed}}/{{dayLimit}} today",
+    "overBudget": "That is more than the minute has left. The markets that miss out fall back to the candles already fetched — real prices, but no longer current.",
+    "apply": "Refresh selected"
+  },
   "state": {
     "loading": "Loading...",
     "empty": "Nothing here yet",

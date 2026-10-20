@@ -1,6 +1,4 @@
-import { DEFAULT_WATCHLIST } from "@atc/market-data";
-
-import { scanWatchlist } from "@/lib/scan";
+import { scanWatchlist, serverWatchlist } from "@/lib/scan";
 import { toSignalData } from "@/lib/signal";
 import { SignalView } from "./SignalView";
 
@@ -13,7 +11,7 @@ export const revalidate = 0;
 export const maxDuration = 60;
 
 export default async function SignalPage() {
-  const scan = await scanWatchlist(DEFAULT_WATCHLIST);
+  const scan = await scanWatchlist(await serverWatchlist());
   const data = toSignalData(scan.results, scan.scannedAt, scan.failed);
 
   return <SignalView data={data} />;

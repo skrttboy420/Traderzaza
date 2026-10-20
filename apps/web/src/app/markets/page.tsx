@@ -1,7 +1,7 @@
-import { DEFAULT_WATCHLIST, requireAsset } from "@atc/market-data";
+import { requireAsset } from "@atc/market-data";
 import type { TrendState } from "@atc/types";
 
-import { scanWatchlist } from "@/lib/scan";
+import { scanWatchlist, serverWatchlist } from "@/lib/scan";
 import { MarketsView, type MarketRow } from "./MarketsView";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +12,7 @@ export const revalidate = 0;
 export const maxDuration = 60;
 
 export default async function MarketsPage() {
-  const scan = await scanWatchlist(DEFAULT_WATCHLIST);
+  const scan = await scanWatchlist(await serverWatchlist());
 
   const rows: MarketRow[] = scan.results.map((result) => {
     // HTF bias comes from the top of the mandatory chain, falling back down it

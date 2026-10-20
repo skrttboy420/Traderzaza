@@ -106,6 +106,8 @@ export function normaliseYahooRows(rows: Candle[], targetSeconds: number, limit:
 export class YahooFinanceProvider implements MarketDataProvider {
   readonly name = "yahoo";
   readonly quality = "LIVE" as const;
+  /** Keyless and unlimited as far as this app is concerned. */
+  readonly metered = false;
   private readonly baseUrl: string;
 
   constructor(baseUrl = "https://query1.finance.yahoo.com") {

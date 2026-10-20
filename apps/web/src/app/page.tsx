@@ -1,7 +1,5 @@
-import { DEFAULT_WATCHLIST } from "@atc/market-data";
-
 import { toHomeData } from "@/lib/home";
-import { scanWatchlist } from "@/lib/scan";
+import { scanWatchlist, serverWatchlist } from "@/lib/scan";
 import { HomeView } from "./HomeView";
 
 // Market state changes constantly, so never cache the scan.
@@ -13,7 +11,7 @@ export const revalidate = 0;
 export const maxDuration = 60;
 
 export default async function HomePage() {
-  const scan = await scanWatchlist(DEFAULT_WATCHLIST);
+  const scan = await scanWatchlist(await serverWatchlist());
 
   const counts: Record<string, number> = {};
   for (const [state, setups] of Object.entries(scan.buckets)) {

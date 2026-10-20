@@ -80,6 +80,32 @@ export interface MtfResponse {
   status: DataStatus;
 }
 
+/** One symbol's slice of a planned scan: which bars it would need loaded. */
+export interface CandlePlanEntry {
+  symbol: string;
+  timeframes: Timeframe[];
+}
+
+export interface SymbolCost {
+  symbol: string;
+  provider: string;
+  metered: boolean;
+  /** Distinct series the plan needs for this symbol. */
+  requests: number;
+  /** Of those, how many the cache can serve without a call. */
+  cached: number;
+  /** Credits this symbol would spend if the scan ran now. */
+  credits: number;
+  /** Credits it costs with a cold cache — the price once the TTLs lapse. */
+  fullCredits: number;
+}
+
+export interface ScanCost {
+  total: number;
+  fullTotal: number;
+  perSymbol: SymbolCost[];
+}
+
 export class MarketDataService {
   private readonly providers: MarketDataProvider[];
   private readonly freshnessDivisor: number;
@@ -110,6 +136,68 @@ export class MarketDataService {
   creditSnapshot(): CreditSnapshot | null {
     const metered = this.providers.find((p): p is TwelveDataProvider => p instanceof TwelveDataProvider);
     return metered ? metered.budget.snapshot() : null;
+  }
+
+  /**
+   * What a set of candle requests would cost in metered credits *right now*.
+   *
+   * The refresh control shows this before the press, which is the only moment
+   * it is useful: once the trader has pressed, knowing the price is too late.
+   *
+   * Two properties make the number mean something.
+   *
+   * It is cache-aware, because the cache is the difference between a free
+   * refresh and four credits of the eight the minute allows, and a flat
+   * per-symbol price would be wrong most of the time. It is also why
+   * `fullCredits` is reported alongside: immediately after a scan everything is
+   * cached and every `credits` reads zero, which on its own would tell the user
+   * that refreshing is permanently free.
+   *
+   * And it unions by symbol, so a plan that asks for gold's 4H twice is priced
+   * once. The dollar basket overlaps the watchlist by three symbols; pricing
+   * those legs separately would invent credits that are never spent.
+   *
+   * It is still an estimate. A TTL can lapse between this call and the scan,
+   * and an exhausted budget turns a would-be charge into a cache read. Both
+   * errors are in the safe direction — the quoted price is an upper bound.
+   */
+  estimateCost(plan: CandlePlanEntry[], limit: number): ScanCost {
+    const now = this.now();
+    const wanted = new Map<string, Set<Timeframe>>();
+
+    for (const entry of plan) {
+      const symbol = entry.symbol.toUpperCase();
+      const set = wanted.get(symbol) ?? new Set<Timeframe>();
+      for (const timeframe of entry.timeframes) set.add(timeframe);
+      wanted.set(symbol, set);
+    }
+
+    const perSymbol: SymbolCost[] = [];
+    for (const [symbol, timeframes] of wanted) {
+      const provider = this.providerFor(symbol);
+      let cached = 0;
+      for (const timeframe of timeframes) {
+        const entry = this.cache.get(cacheKey({ symbol, timeframe, limit }));
+        if (!entry) continue;
+        if (now - entry.storedAt < candleTtlSeconds(timeframe, this.freshnessDivisor)) cached += 1;
+      }
+      const requests = timeframes.size;
+      perSymbol.push({
+        symbol,
+        provider: provider.name,
+        metered: provider.metered,
+        requests,
+        cached,
+        credits: provider.metered ? requests - cached : 0,
+        fullCredits: provider.metered ? requests : 0,
+      });
+    }
+
+    return {
+      total: perSymbol.reduce((sum, row) => sum + row.credits, 0),
+      fullTotal: perSymbol.reduce((sum, row) => sum + row.fullCredits, 0),
+      perSymbol,
+    };
   }
 
   providerFor(symbol: string): MarketDataProvider {

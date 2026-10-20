@@ -1,6 +1,4 @@
-import { DEFAULT_WATCHLIST } from "@atc/market-data";
-
-import { scanWatchlist } from "@/lib/scan";
+import { scanWatchlist, serverWatchlist } from "@/lib/scan";
 import { weakestStatus } from "@/lib/home";
 import { SetupsView } from "./SetupsView";
 
@@ -12,7 +10,7 @@ export const revalidate = 0;
 export const maxDuration = 60;
 
 export default async function SetupsPage() {
-  const scan = await scanWatchlist(DEFAULT_WATCHLIST);
+  const scan = await scanWatchlist(await serverWatchlist());
 
   return (
     <SetupsView

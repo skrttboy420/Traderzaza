@@ -25,6 +25,26 @@ export type Timeframe = "1m" | "5m" | "15m" | "30m" | "1h" | "4h" | "1d";
 
 export const TIMEFRAMES: Timeframe[] = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"];
 
+/**
+ * How long one candle of each timeframe covers, in seconds.
+ *
+ * Lives here rather than beside the providers because it is not a fetching
+ * detail: it is the only way to turn a candle's open time into the instant it
+ * closed, and anything replaying history has to know that. A 4H bar stamped
+ * 12:00 is still being written at 13:00, so code that asks "which candles
+ * existed at 13:00?" and answers with `time <= clock` hands itself the next
+ * three hours of price action.
+ */
+export const TIMEFRAME_SECONDS: Record<Timeframe, number> = {
+  "1m": 60,
+  "5m": 300,
+  "15m": 900,
+  "30m": 1800,
+  "1h": 3600,
+  "4h": 14400,
+  "1d": 86400,
+};
+
 /** Mandatory multi-timeframe chain: HTF bias -> intermediate -> entry -> trigger. */
 export const MTF_CHAIN: Timeframe[] = ["4h", "1h", "15m", "5m"];
 
