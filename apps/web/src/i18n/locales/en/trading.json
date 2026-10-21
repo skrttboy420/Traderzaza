@@ -306,5 +306,68 @@
     },
     "callRecorded": "Call recorded. Keep stepping the chart; it settles when the stop or the target is reached.",
     "window": "Measured within"
+  },
+  "backtest": {
+    "title": "Does the grade mean anything?",
+    "subtitle": "Replays the engine bar by bar over the history already loaded, settles its own signals against what price then did, and reports average R per grade.",
+    "market": "Market",
+    "timeframe": "Entry timeframe",
+    "mode": "Signals",
+    "modes": {
+      "graded": "Every graded setup",
+      "entry": "Entry-now only"
+    },
+    "modeHint": {
+      "graded": "Settles every setup the engine put a letter on. This is the question the grade has to answer: an A should out-earn a C, or the letter is decoration.",
+      "entry": "Settles only the calls the app presents as act-on-it-now. A far stricter filter — over a quiet few days it often finds nothing at all, which is the engine being selective rather than broken."
+    },
+    "run": "Run the backtest",
+    "rerun": "Run again",
+    "running": "Replaying...",
+    "runningHint": "The engine is re-run once per bar. This takes a few seconds.",
+    "ranOn": "Showing: {{market}} · {{timeframe}} · {{mode}}",
+    "verdict": {
+      "holds": "The grade ranking holds",
+      "inverted": "The grade ranking is inverted",
+      "thin": "Not enough trades to answer yet",
+      "noSignals": "The engine called no trades in this window",
+      "noRun": "Not enough history to replay"
+    },
+    "verdictHint": {
+      "holds": "Average R falls as the grade falls, which is exactly what the letter claims. Both grades compared cleared the minimum sample.",
+      "inverted": "A lower grade out-earned a higher one over this sample. If that survives a longer run, the scoring weights need rethinking rather than defending.",
+      "thin": "Fewer than two grades reached twenty settled trades, and below twenty a single outlier still flips the average's sign. The rows below are real results, but they are not yet evidence either way. The window is capped at the candles the scan already asks for — which is what stops a backtest costing more than a refresh of the same market, and what keeps it short.",
+      "noSignals": "No setup reached the selected state over this window, so nothing was settled and there is nothing to grade. Try the wider signal set.",
+      "noRun": "The series was too short to analyse a single bar. Open this market on a scanning screen once so the candles are loaded."
+    },
+    "stats": {
+      "analysed": "Bars analysed",
+      "signals": "Signals raised",
+      "trades": "Trades settled",
+      "expectancy": "Average per trade",
+      "tooFew": "Too few",
+      "coverage": "History covered",
+      "settled": "Won / lost",
+      "totalR": "Total R",
+      "maxDd": "Worst drawdown",
+      "winRate": "Win rate",
+      "avgR": "Avg R"
+    },
+    "byGrade": "Result by grade",
+    "grade": "Grade",
+    "qualifiers": "{{ambiguous}} settled against us because one candle touched both the stop and the target, and {{windowClosed}} reached neither and were closed at market. Candle data carries no tick order, so we never guess in our own favour.",
+    "skipped": "Signals that became no trade",
+    "skip": {
+      "positionOpen": "A trade was already open",
+      "zoneAlreadyTraded": "That zone had been traded once",
+      "noPlan": "No entry plan at that moment",
+      "noTarget": "The plan set no target",
+      "stopOnWrongSide": "Stop was the wrong side of entry",
+      "targetOnWrongSide": "Target was the wrong side of entry",
+      "noForwardCandles": "No candles left to settle against"
+    },
+    "skippedHint": "Most signals never become trades, and that is the risk rules working: one position at a time, one trade per zone. It also means the engine speaks far more often than it acts.",
+    "footer": "{{bars}} bars · ran in {{seconds}}s · {{credits}} credits spent",
+    "caveat": "No spread, no commission, no slippage and no partial fills, so these R figures are an upper bound on what the same decisions would have earned in a real account. The ordering between grades is the part worth trusting; the absolute numbers are not."
   }
 }

@@ -29,7 +29,7 @@ Eleven screens on the bottom navigation, plus a setup-detail route and the two a
 | **Positions** | `/positions` | A manual tracker — no broker connection, no orders. Record what you opened in your platform, track it against live price, grade the outcome in R. Structure-aware SL and break-even reasoning, management log. |
 | **Journal** | `/journal` | Trade classification, MFE/MAE, plan adherence, per-symbol R, missed setups (anti-hindsight), personal rules engine. |
 | **Coach** | `/coach` | Chat with the coach in Coach or Direct mode at three explanation levels, psychology patterns from journal evidence, weekly report, 27-term glossary. |
-| **Training** | `/training` | Candle-by-candle market replay. Play / pause / next / fast-forward / reset, make your call, get scored. Every practice trade is kept with the entry price, the SL and TP you placed, where price actually went, and the result in R — not just "right" or "wrong". No future candles leak. |
+| **Training** | `/training` | Two halves. The replay grades *you*: candle-by-candle, play / pause / next / fast-forward / reset, make your call, get scored, with the entry price, the SL and TP you placed, where price actually went and the result in R kept for every practice trade — not just "right" or "wrong", and no future candles leak. The backtest panel grades *the engine*: it replays `analyze()` over the same history and settles its own signals, so the claim that an A out-earns a C is checked rather than asserted. It reports `thin` when the sample cannot answer, which on four days of data is most of the time. |
 | **Guide** | `/guide` | The in-app usage guide: what each screen is for, what the Setup Quality Score does and does not mean, whether the chart is delayed, and what the app cannot do. TH + EN. |
 | **Settings** | `/settings` | The account panel, risk, watchlist, timeframes, data sources with per-symbol provider + quality, AI, alerts, display, storage, honest limitations. |
 | **Sign in / Sign up** | `/login`, `/signup` | Username and password, no email. Not linked from the nav and not required by any screen — reachable from the account chip in the top bar. |
@@ -64,6 +64,11 @@ mechanically, in `packages/ai/src/provider.ts`.
 **AI Confidence** is a separate number describing how sure the model is about its *reading*.
 They are never merged, and Top Opportunities is ordered by quality/readiness/R:R — never by
 AI confidence.
+
+The score still has to earn the letter it prints, and `/training` is where that is checked:
+the backtest panel replays the engine over history and reports what each grade actually
+settled at. On the history currently available the usual answer is "the sample is too thin
+to say", which is reported as exactly that rather than as a pass.
 
 ---
 
@@ -154,12 +159,12 @@ ai-trading-coach/
         │   ├── page.tsx + HomeView.tsx
         │   ├── signal/ markets/ setups/ setups/[symbol]/ news/ positions/ journal/
         │   │   coach/ training/ guide/ settings/ login/ signup/
-        │   └── api/              candles, analysis, scan, status, news, news/reaction,
-        │                         ai/analyze, ai/chat, auth/signup
+        │   └── api/              candles, analysis, scan, scan-cost, backtest, status,
+        │                         news, news/reaction, ai/analyze, ai/chat, auth/signup
         ├── components/           PriceChart (lightweight-charts), SetupCard, ScoreBreakdown,
         │                         FactBlock, PlansPanel, AiPanel, RiskCalculator, JournalForm,
-        │                         NewsPanel + NewsRiskStrip, AuthForm, AccountChip,
-        │                         AccountPanel, ThemeSwitch, ui.tsx
+        │                         NewsPanel + NewsRiskStrip, BacktestPanel, AuthForm,
+        │                         AccountChip, AccountPanel, ThemeSwitch, ui.tsx
         ├── i18n/
         │   ├── provider.tsx      React-context i18n, instant switch, persisted, default Thai
         │   ├── locales/{th,en}/{common,trading,coach,journal,settings,news,guide,auth}.json
@@ -178,7 +183,11 @@ ai-trading-coach/
             ├── format.ts         locale-aware number/price/R formatting
             ├── home.ts           Home-screen derivation
             ├── signal.ts         Signal-screen derivation
-            └── setup.ts          setup-detail derivation
+            ├── setup.ts          setup-detail derivation
+            ├── afford.ts         widest stop this balance can carry at the min lot
+            ├── watchlist.ts      the scan-selection cookie, validated rather than parsed
+            ├── scan-cost.ts      what a refresh will cost, priced before the press
+            └── backtest.ts       request validation + the five verdicts the panel renders
 ```
 
 ---
@@ -378,6 +387,50 @@ teach the user that refreshing is permanently free.
 The numbers are an upper bound: a TTL can lapse between the quote and the press, and an
 exhausted budget turns a would-be charge into a cache read. Both errors are in the safe
 direction.
+
+### `GET /api/backtest`
+
+`?symbol=XAUUSD&timeframe=15m&mode=graded`. Replays `analyze()` bar by bar over the history
+already loaded and settles each signal against the candles that followed. This is the only
+endpoint that **grades the grader**: everywhere else the app presents a setup's letter as
+meaningful, and until this ran nothing had checked that an A out-earns a C.
+
+It runs on the server rather than in the tab because the engine is re-run a few hundred
+times over four timeframes of indicators — in the browser that is a frozen phone, here it
+is one request that resolves in a few seconds and `maxDuration = 60` so a cold instance is
+not cut off mid-run and reported as a network error.
+
+**It asks for exactly the series a scan asks for.** The candle cache keys on
+`{symbol, timeframe, limit}`, so a request for more history — the obvious thing to want from
+a backtest — would miss on every key, refetch gold's four bars at full price on every press,
+and keep a *second* set of entries warm alongside the scan's, doubling the standing cost of
+the market. Pinning `candleLimit` and the scan's own chain means a backtest is free while
+the page's candles are warm and never dearer than one refresh of the same market when they
+are not. `credits` reports the **measured** spend (the day-counter delta, clamped at zero
+for the UTC rollover) rather than asserting the cheerful number.
+
+`mode` picks which signals to settle, and both exist because of a measurement. `entry`
+takes only ENTRY_NOW — "were the calls I was actually shown any good". On four days of gold
+it settles *nothing*: a probe over 279 bars found the scanner reached WATCHLIST 213 times,
+NO_TRADE 65, and ENTRY_NOW never, while grades were plentiful (A:2, B:25, C:167, D:84). The
+grade question does not require ENTRY_NOW — the scanner state is a separate filter — so
+`graded` (the default) takes every lettered setup and settles 15–17 trades instead of an
+empty table, which is the easiest thing in this app to misread as a quiet market. NO_TRADE
+is excluded from both: settling it would score the system on trades it told you to skip.
+
+`stride` is 2, also measured: stride 1 settles 17 trades in 7.5s, stride 2 settles 15 in
+3.5s. Halving the work costs two trades because the sample is bounded by the
+one-position-at-a-time and once-per-zone rules, not by how often the engine speaks.
+
+Returns `{ request, report, stride, bars, status, credits, ranMs }`. `request` is echoed
+because the run takes seconds, which is long enough for the user to change the mode
+mid-flight and read one mode's numbers under the other's heading.
+
+4H is refused even though the chain loads it: at 400 bars the 60-bar settle horizon alone is
+ten days, so the tail of the sample never closes. A timeframe or symbol the server would not
+have loaded is a **400**, never an empty report — `backtest()` reads `candles[entryTimeframe]`,
+and `undefined` becomes an empty series, which becomes zero analyses and zero trades, which
+on screen is indistinguishable from "the engine looked and found nothing".
 
 ### `GET /api/news`
 
@@ -612,7 +665,7 @@ pnpm test        # all suites
 pnpm verify      # typecheck + all suites   ← the gate
 ```
 
-**223 assertions across 16 suites, all passing.** No network, no API keys, fully deterministic.
+**233 assertions across 17 suites, all passing.** No network, no API keys, fully deterministic.
 
 | Suite | Count | Covers |
 |---|---|---|
@@ -631,6 +684,7 @@ pnpm verify      # typecheck + all suites   ← the gate
 | `apps/web/src/lib/signal.test.ts` | 4 | **`measured` counts the markets that answered, not the markets that were asked** · a scan where every market failed measured nothing, and reports no blocked markets either — a market that never loaded was not *blocked*, it was *absent* · **an empty scan is never badged as live data** · every scanning screen still carries the branch that tells the two kinds of nothing apart |
 | `apps/web/src/lib/watchlist.test.ts` | 12 | The cookie is the one piece of user-controlled input that directly drives metered spending, so it is validated rather than parsed. **A symbol the catalogue does not know never reaches the scanner** — `requireAsset` throws, so a stale cookie from an older build would take down every scanning screen at once rather than degrade · **repetition cannot multiply what the scan costs**, and the catalogue is the ceiling on how much a cookie can ask for · **a malformed percent-escape does not take the server render down** (`decodeURIComponent("%")` throws, and unhandled that is a 500 on four screens triggered from devtools) · **an unusable cookie falls back to the full default, never to an empty list** — an empty scan draws the same screen as a scan that found nothing, and this app's whole posture is that those two must never look alike · what the browser writes is what the server reads back, over the same bytes · **a burst of clicks removes every market that was clicked**: React batches clicks in one tick, so a toggle computed from the render closure would drop all but the last, and the user unticks four markets, sees three still ticked, and keeps paying for them · **removing the last market is refused rather than silently reversed**, because an empty cookie reads as "no preference" and would widen the scan to all six — the opposite of the press, and billed for it · a market ticked back on returns to its place in the catalogue instead of being appended, so toggling does not reorder the dashboard underneath the user |
 | `apps/web/src/lib/scan-cost.test.ts` | 6 | **Unticking the only metered market does not remove the way to tick it back on.** The chip showing the price is also the only entry point to the market picker, so a visibility rule keyed to the *selection* deletes the control the moment it is used as intended: drop gold, the total falls to zero, the chip vanishes, and gold can never be restored from the header again. Visibility is asserted to be a property of the catalogue, never of the selection — found by doing it in the browser, not by reading the code · a deployment with no metered feed shows no price at all, since a permanent "0" is noise · **the quoted total is the sum of the rows the server priced**, which is exact rather than approximate because per-symbol costs are marginal over a baseline that already contains the only shared series · **a warm cache is quoted free without hiding what it costs cold** · the baseline is charged even when the watchlist is empty · a symbol the catalogue has dropped is ignored rather than thrown over, because the selection lives in localStorage and can outlive a release |
+| `apps/web/src/lib/backtest.test.ts` | 10 | The screen that grades the grader, and every test here is about not overstating what the run knows. **An unanswered question is never rendered as a pass** — the engine reports a sample too thin for a per-grade verdict as `gradeOrderHolds === null`, and `null` is falsy, so the obvious tick-when-true rendering turns "we cannot say yet" into "the grading is broken" while `?? true` turns it into a pass the data does not support; on a few hundred bars `null` is the *usual* answer, so whichever way it is collapsed becomes the number the user reads most often. Five verdicts are kept distinct for the same reason: **an engine that declined to trade for four days is working as designed and must not look like a backtest that failed to start** · **a headline expectancy is withheld until the sample can support one**, because `expectancyR` is defined for a single trade and one trade printed to two decimals looks exactly like a measured edge · **the backtest only runs on timeframes the scan has already paid for** — asserted as `BACKTEST_TIMEFRAMES ⊆ MTF_CHAIN`, which is a *cost* invariant rather than a UI one: the cache keys on `limit` and `timeframe`, so admitting a frame outside the chain is a fresh metered fetch on every press and a second set of warm entries doubling the standing bill · **a timeframe the server never loaded is refused, not reported as an empty run**, and a symbol outside the catalogue never reaches the engine · **no mode ever settles a trade the engine said to stay out of**, since scoring NO_TRADE would produce an R belonging to no decision anyone made, and the strict mode is asserted to be a subset of the graded one |
 | `apps/web/src/i18n/dictionaries.test.ts` | 6 | **every namespace defines exactly the same keys in both locales** · no translation is blank · **a key interpolates the same `{{variables}}` in both locales** · **every placeholder is written in the form `interpolate` actually substitutes** · **the dictionary names every session and liquidity level the engine can emit** · the guide renders every bullet its translations define. `translate()` falls back to the other locale before falling back to the key, which is right at runtime but means a missing Thai string renders as English and nobody notices — so parity is asserted rather than maintained by hand. The last two guards exist because parity only catches an *asymmetric* mistake: a string written `{points}` instead of `{{points}}` is never substituted and ships literal braces to the screen, and a dictionary missing a liquidity level renders a raw key — but do both in *both* locales and every other test here passes. One shipped that way across four features before the placeholder guard was added |
 
 The bolded cases are the honesty invariants. They are the tests that would catch the product
@@ -695,11 +749,14 @@ Stated plainly, because the whole point of the product is not overstating what i
 9. **AI accuracy tracking is scaffolded, not populated.** Per-grade calibration ("setups the
    AI graded A resolved like this") needs persisted history, so the Coach screen says
    "not enough samples" instead of showing a flattering number.
-10. **Replay is training, not backtesting.** It replays real provider history candle by candle
-    with no lookahead, settles every practice call against the candles that followed, and
-    keeps the entry/exit prices and R — but it does not yet persist results across sessions
-    or sweep parameters over a date range. The `backtests` / `backtest_trades` tables are
-    there for when it does.
+10. **The backtest is bounded by what is in memory, which is about four days.** It is real —
+    it runs the engine bar by bar with the same no-lookahead truncation the replay uses, and
+    the Training screen shows per-grade R — but it is pinned to the scan's own 400-bar
+    request so that it shares the candle cache instead of doubling the metered bill, and 400
+    15-minute bars is four days. That is usually too thin for a per-grade verdict, and the
+    report says `thin` rather than inventing one. No date-range sweeps, no persistence across
+    sessions, no parameter search. The `backtests` / `backtest_trades` tables are there for
+    when there is history worth writing to them.
 11. **Journal statistics are honest about thin samples.** Below 20 trades the app shows the
     numbers but flags them as not yet meaningful, and undefined ratios render as `—` rather
     than `0`.
@@ -749,8 +806,10 @@ Stated plainly, because the whole point of the product is not overstating what i
    `trigger` jsonb that proves which state change justified sending).
 9. Screenshot upload on journal entries (`trade_screenshots` is ready) so the replay/review
    loop can compare the chart you saw against the chart that happened.
-10. Turn replay into a real backtester: date-range sweeps, persisted `backtest_trades`, and the
-    AI review pass over the results.
+10. Give the backtest more than four days to look at: persist candles so a run is not capped by
+    the scan's cache window, then date-range sweeps, persisted `backtest_trades`, and the AI
+    review pass over the results. The sample size is the only thing standing between the
+    current `thin` verdict and a per-grade answer worth acting on.
 11. Expand to indices and equities, which mostly means session-aware handling of gaps and
     exchange hours in the context engine.
 
@@ -805,6 +864,27 @@ Documented because they are deviations or non-obvious trade-offs.
   the catalogue rather than to the selection, because the chip is also the only way into
   the picker: hiding it when the selection costs nothing meant unticking gold deleted the
   control needed to tick gold back on.
+- **The backtest buys its honesty by giving up history, and says so instead of hiding it.**
+  The natural instinct is to let a backtest ask for as much history as it can get. That
+  instinct is wrong here for a reason that is invisible in the code: `cacheKey` includes
+  `limit`, so a run asking for 2000 bars misses every entry the scan warmed, refetches gold
+  at full price on every press, and leaves a parallel set of entries aging alongside the
+  scan's — the standing cost of the market doubles, to answer a question about the past.
+  So the run is pinned to `serverEnv().candleLimit` and the scan's own chain, which makes it
+  free on a warm cache and never dearer than one refresh when it is not, and the route
+  **measures** what it actually spent rather than asserting the comfortable number. The bill
+  for that is four days of 15-minute bars, which is usually too thin to say whether an A
+  out-earns a C — so the report answers `thin`, because the alternative is a per-grade
+  ranking computed from three trades. Two things followed from running it rather than
+  reading it. **`gradeOrderHolds` is three-valued and the UI must stay three-valued**: the
+  engine returns `null` for "cannot say yet", `null` is falsy, and the obvious tick-or-cross
+  rendering silently converts the most common answer into an accusation that the grading is
+  broken. And the default mode is `graded`, not `entry`, because a probe found the scanner
+  reached ENTRY_NOW **zero** times in 279 bars of gold while emitting 194 graded setups —
+  the grade and the scanner state are separate filters, and a strict-only backtest would
+  have shipped an empty table that reads exactly like a quiet market. Both modes are offered;
+  neither settles NO_TRADE, since scoring trades the engine told you to skip produces an R
+  that belongs to no decision anyone made.
 - **Thai is the default locale**, and Thai copy is written the way a trader speaks, not the
   way a textbook translates. Technical terms stay in English (BOS, CHoCH, Supply Zone) with a
   Thai explanation attached, because that is how Thai traders actually say them.

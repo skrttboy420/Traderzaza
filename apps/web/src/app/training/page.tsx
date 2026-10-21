@@ -18,6 +18,7 @@ import {
   type Timeframe,
 } from "@atc/types";
 
+import { BacktestPanel } from "@/components/BacktestPanel";
 import { DataStatusBadge } from "@/components/DataStatusBadge";
 import { PriceChart } from "@/components/PriceChart";
 import { TopBar } from "@/components/TopBar";
@@ -881,6 +882,11 @@ export default function TrainingPage() {
             </section>
           </>
         ) : null}
+
+        {/* The other half of training: the replay above grades the trader,
+            this grades the engine. Outside the `read` conditional on purpose —
+            it needs no replay loaded and must be reachable on a cold visit. */}
+        <BacktestPanel />
 
         <Disclaimer text={tc("disclaimer")} />
       </main>
