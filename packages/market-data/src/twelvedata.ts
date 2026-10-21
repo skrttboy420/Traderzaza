@@ -117,6 +117,12 @@ export class TwelveDataProvider implements MarketDataProvider {
   readonly quality: "LIVE" | "DELAYED";
   /** The only feed here that can run out. One `time_series` call, one credit. */
   readonly metered = true;
+  /**
+   * `outputsize` tops out at 5000. Measured on the free tier: four sequential
+   * pages walked 15m gold back seven months, so the depth limit here is the
+   * page budget we choose, not anything the API imposes.
+   */
+  readonly maxBarsPerCall = 5000;
   readonly budget: CreditBudget;
   private readonly apiKey: string;
   private readonly baseUrl: string;

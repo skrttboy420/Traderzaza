@@ -5,3 +5,4 @@ export * from "./binance";
 export * from "./yahoo";
 export * from "./twelvedata";
 export * from "./service";
+export * from "./history";

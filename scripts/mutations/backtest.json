@@ -1,0 +1,42 @@
+[
+  {
+    "name": "the stride is a constant again, as it shipped",
+    "expect": "a run of any depth stays inside the analysis budget",
+    "edit": ["return Math.max(2, Math.ceil(entryBars / MAX_ANALYSES));", "return 2;"]
+  },
+  {
+    "name": "the stride rounds down, landing one analysis past the budget",
+    "expect": "a run of any depth stays inside the analysis budget",
+    "edit": ["return Math.max(2, Math.ceil(entryBars / MAX_ANALYSES));", "return Math.max(2, Math.floor(entryBars / MAX_ANALYSES));"]
+  },
+  {
+    "name": "the floor of 2 is dropped, so a shallow run steps by zero",
+    "expect": "the step never collapses to re-analysing the same bar",
+    "edit": ["return Math.max(2, Math.ceil(entryBars / MAX_ANALYSES));", "return Math.ceil(entryBars / MAX_ANALYSES);"]
+  },
+  {
+    "name": "the shallow path quietly changes step",
+    "expect": "today's shallow runs are left exactly as they shipped",
+    "edit": ["return Math.max(2, Math.ceil(entryBars / MAX_ANALYSES));", "return Math.max(3, Math.ceil(entryBars / MAX_ANALYSES));"]
+  },
+  {
+    "name": "a provider wall is sold back to the user as a retry",
+    "expect": "the end of the feed's history is not sold as a retry",
+    "edit": ["return frames.some((f) => f.stopped === \"pageLimit\" || f.stopped === \"deadline\");", "return frames.some((f) => f.stopped !== \"target\");"]
+  },
+  {
+    "name": "a run that stopped itself is reported as finished",
+    "expect": "a run that stopped itself invites another press",
+    "edit": ["return frames.some((f) => f.stopped === \"pageLimit\" || f.stopped === \"deadline\");", "return false;"]
+  },
+  {
+    "name": "the deadline stop is forgotten, so a timed-out press looks done",
+    "expect": "a run that stopped itself invites another press",
+    "edit": ["return frames.some((f) => f.stopped === \"pageLimit\" || f.stopped === \"deadline\");", "return frames.some((f) => f.stopped === \"pageLimit\");"]
+  },
+  {
+    "name": "a real failure is hidden behind a retry prompt",
+    "expect": "a failed frame is not quietly turned into a retry prompt",
+    "edit": ["return frames.some((f) => f.stopped === \"pageLimit\" || f.stopped === \"deadline\");", "return frames.some((f) => f.stopped === \"pageLimit\" || f.stopped === \"deadline\" || f.stopped === \"error\");"]
+  }
+]

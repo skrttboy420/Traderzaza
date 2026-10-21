@@ -71,6 +71,89 @@ export function modeStates(mode: BacktestMode): ScannerState[] {
     : ["ENTRY_NOW", "WAIT_CONFIRMATION", "LIMIT_ZONE", "WATCHLIST"];
 }
 
+/**
+ * How deep the archive is filled, in calendar days.
+ *
+ * Four months, because that is what makes the per-grade verdict answerable at
+ * all. Measured on 120 days of 15-minute BTC: 386 settled trades spread
+ * B:69 C:196 D:118, three grades past the 20-trade floor at which expectancy
+ * stops being able to flip its own sign. The shipped 400-bar window settles
+ * seventeen trades across all grades, so it can only ever report `thin`.
+ *
+ * It is also affordable exactly once. On the metered feed the whole chain at
+ * this depth is about ten credits of the daily 800 — paid on the first press
+ * and never again, because the bars are written down.
+ */
+export const BACKTEST_DEPTH_DAYS = 120;
+
+/**
+ * Analyses a single run may perform.
+ *
+ * This is a *deadline* budget, not a quality one. `analyze` is re-run from
+ * scratch at every step over four timeframes of indicators, and it measures at
+ * roughly 36ms a call — so the run length is set by how many times it is
+ * called, and nothing else. The serverless deadline is 60s (see `maxDuration`
+ * on the route), and a run cut off at the deadline is not a slower answer, it
+ * is a network error on screen.
+ *
+ * 700 measured at 33s end to end on a four-month archive, including the read.
+ * The first value tried was 900, which measured 41s — inside the deadline but
+ * only just, and the margin has to absorb a cold instance, a slower database
+ * round trip and a market with more signals than the one measured. A run that
+ * overruns does not return a smaller answer, it returns a network error.
+ */
+export const MAX_ANALYSES = 700;
+
+/**
+ * Bars to step between analyses, chosen so a run of any depth still finishes.
+ *
+ * A fixed stride cannot work once history stops being fixed: stride 2 over
+ * four days is 140 analyses and five seconds, and stride 2 over four months is
+ * 5,700 analyses and 208 seconds — the same constant, one of which is a
+ * timeout. So the stride is derived from the series instead.
+ *
+ * Widening it costs far less than it looks like it should, because the sample
+ * is not bounded by how often the engine is asked. One-position-at-a-time and
+ * once-per-zone collapse long runs of adjacent signals into a single trade
+ * regardless, so a denser walk mostly re-reads zones already being traded.
+ * Measured across the same 120 days of 15-minute BTC:
+ *
+ *   stride  2  208s  386 trades
+ *   stride  4  103s  355 trades   (half the time, 8% of the trades)
+ *   stride  8   56s  291 trades
+ *   stride 12   33s  249 trades   (a sixth of the time, a third of the trades)
+ *
+ * Trading 249 trades over four months against 386 is a good deal; trading 386
+ * against a timeout is not. And either beats seventeen trades over four days,
+ * which is the sample this replaces.
+ *
+ * The floor of 2 keeps today's shallow runs exactly as they ship: 400 bars
+ * never reaches the cap, so the live fallback path is unchanged.
+ *
+ * What a wide stride *does* cost is transient states, and `entry` mode is
+ * made of them. WATCHLIST and LIMIT_ZONE persist for hours, so a three-hour
+ * step still lands inside them; ENTRY_NOW is momentary by construction, and a
+ * step that wide walks over most of the moments it existed. Measured on four
+ * months of 15-minute BTC, `entry` settles a single trade. That is a sampling
+ * artefact as much as a fact about the market, and it is why the response
+ * reports `stride` rather than treating it as an implementation detail.
+ */
+export function backtestStride(entryBars: number): number {
+  return Math.max(2, Math.ceil(entryBars / MAX_ANALYSES));
+}
+
+/** Where the bars a run was graded on came from. */
+export type BacktestSource = "archive" | "live";
+
+export interface BacktestCoverage {
+  /** Bars stored for the entry timeframe. */
+  bars: number;
+  /** Calendar days between the oldest and newest stored bar. */
+  days: number;
+  /** False when this deployment has no database to store history in. */
+  configured: boolean;
+}
+
 export interface BacktestRequest {
   symbol: string;
   timeframe: Timeframe;
@@ -92,11 +175,75 @@ export interface BacktestResponse {
   bars: Partial<Record<Timeframe, number>>;
   status: DataStatus;
   /**
+   * Whether the run read stored history or the live 400-bar window.
+   *
+   * On screen this is the difference between "the grading does not hold" and
+   * "we cannot say yet", so it must never be inferred from the trade count.
+   * A `live` run is four days deep and will almost always report `thin`;
+   * presenting that identically to a four-month `archive` run would let a
+   * missing database read as a verdict about the strategy.
+   */
+  source: BacktestSource;
+  /** What is stored for this series, so the panel can offer to deepen it. */
+  coverage: BacktestCoverage;
+  /**
    * Credits this press actually spent, measured rather than estimated. Null
    * when the deployment has no metered feed to spend from.
    */
   credits: number | null;
   /** Wall-clock cost of the run. The engine is re-run once per bar. */
+  ranMs: number;
+}
+
+/**
+ * One timeframe's result from a backfill press.
+ *
+ * Reported per frame rather than as a single success flag because the frames
+ * fail differently and independently: four months of 4H is one page, four
+ * months of 5M is thirty, and a run where 5M alone hit the page budget is a
+ * real outcome the user can fix by pressing again. One flag would hide it.
+ */
+export interface BackfillFrame {
+  timeframe: Timeframe;
+  /** Upstream calls spent. On the metered feed this is the bill. */
+  pages: number;
+  /** Bars sent to the database. */
+  written: number;
+  /** Bars stored for this frame afterwards. */
+  stored: number;
+  /**
+   * Why the walk ended. Four of these come from `BackfillStop` in
+   * @atc/market-data; `deadline` is added by the route, which stops the whole
+   * press before the serverless platform would and marks the frames it never
+   * got to. They are kept distinct because only two are problems: `target` is
+   * done, `deadline` and `pageLimit` mean press again, `providerWall` is the
+   * real end of the feed's history, and `error` is the only failure.
+   */
+  stopped: "target" | "providerWall" | "pageLimit" | "deadline" | "error";
+  reason?: string;
+}
+
+/**
+ * Whether pressing again would get more history.
+ *
+ * The panel needs this to decide between "filled" and "press again", and the
+ * distinction is not cosmetic: `providerWall` means the feed has no more bars
+ * and pressing again spends credits for nothing, while `pageLimit` and
+ * `deadline` mean the run stopped itself and the next press resumes. Treating
+ * them alike would either hide real missing history or invite the user to buy
+ * the same wall over and over.
+ */
+export function backfillIncomplete(frames: BackfillFrame[]): boolean {
+  return frames.some((f) => f.stopped === "pageLimit" || f.stopped === "deadline");
+}
+
+export interface BackfillResponse {
+  request: BacktestRequest;
+  frames: BackfillFrame[];
+  /** Coverage of the entry timeframe once the run finished. */
+  coverage: BacktestCoverage;
+  /** Credits this press actually spent. Null without a metered feed. */
+  credits: number | null;
   ranMs: number;
 }
 

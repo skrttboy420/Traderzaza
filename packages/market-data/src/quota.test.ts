@@ -48,6 +48,8 @@ class CountingProvider implements MarketDataProvider {
   readonly quality = "LIVE" as const;
   /** Mutable so the cost tests can price the same provider both ways. */
   metered = false;
+  /** Mutable so the paging tests can force a page boundary cheaply. */
+  maxBarsPerCall = 1000;
   calls = 0;
   fail = false;
   price = 100;
@@ -231,6 +233,7 @@ async function run(): Promise<void> {
       name: "mock",
       quality: "DEMO",
       metered: false,
+      maxBarsPerCall: 1000,
       supports: () => true,
       fetchCandles: async () => {
         if (fail) throw new Error("feed down");

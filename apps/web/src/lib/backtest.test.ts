@@ -9,10 +9,14 @@ import {
   BACKTEST_TIMEFRAMES,
   DEFAULT_BACKTEST_MODE,
   DEFAULT_BACKTEST_TIMEFRAME,
+  MAX_ANALYSES,
+  backfillIncomplete,
+  backtestStride,
   backtestVerdict,
   hasUsableSample,
   modeStates,
   parseBacktestRequest,
+  type BackfillFrame,
 } from "./backtest";
 
 /**
@@ -194,4 +198,99 @@ test("a headline expectancy is withheld until the sample can support one", () =>
   assert.equal(hasUsableSample(report({ overall: summary({ trades: 1, expectancyR: 2.0 }) })), false);
   assert.equal(hasUsableSample(report({ overall: summary({ trades: 19 }) })), false);
   assert.equal(hasUsableSample(report({ overall: summary({ trades: 20 }) })), true);
+});
+
+/**
+ * The stride, which is a promise about the clock rather than a tuning knob.
+ *
+ * `analyze` is re-run from scratch at every step over four timeframes of
+ * indicators, so the run length is set by how many times it is called and by
+ * nothing else. The route's deadline is 60s, and a run cut off at the deadline
+ * is not a shorter answer — it is a network error where a verdict should be.
+ * Measured: stride 2 over four months of 15-minute bars is 5,700 analyses and
+ * 208 seconds.
+ */
+
+test("a run of any depth stays inside the analysis budget", () => {
+  // The property, not an example. Four days of 15m through four months of 5m,
+  // plus the sizes either side of the cap where an off-by-one would hide.
+  for (const bars of [0, 1, 279, 400, 1399, 1400, 1401, 11_520, 34_560, 250_000]) {
+    const analyses = Math.ceil(bars / backtestStride(bars));
+    assert.ok(
+      analyses <= MAX_ANALYSES,
+      `${bars} bars at stride ${backtestStride(bars)} is ${analyses} analyses, past the ${MAX_ANALYSES} budget`,
+    );
+  }
+});
+
+test("today's shallow runs are left exactly as they shipped", () => {
+  // The live fallback is 400 bars and must not silently change behaviour the
+  // day deep history lands: a window that already finishes in five seconds
+  // gains nothing from a wider step and loses transient states to it.
+  assert.equal(backtestStride(400), 2);
+  assert.equal(backtestStride(279), 2);
+  assert.equal(backtestStride(0), 2, "an empty series must not divide by zero or step by zero");
+});
+
+test("the step never collapses to re-analysing the same bar", () => {
+  // A stride of 0 is an infinite loop and a stride of 1 doubles the cost of
+  // the shallow path for no extra trades.
+  for (const bars of [0, 1, 5, 400, 11_520]) {
+    assert.ok(backtestStride(bars) >= 2, `${bars} bars produced a stride below 2`);
+  }
+});
+
+test("deeper history widens the step rather than overrunning", () => {
+  // Monotonic, because the alternative is a depth where the run is slower
+  // than a deeper one — which would read as a bug on screen and be one.
+  let previous = 0;
+  for (const bars of [400, 1_400, 2_800, 11_520, 34_560]) {
+    const stride = backtestStride(bars);
+    assert.ok(stride >= previous, `${bars} bars stepped narrower than a shallower run`);
+    previous = stride;
+  }
+  assert.ok(backtestStride(34_560) > backtestStride(400), "depth made no difference to the step");
+});
+
+/**
+ * Whether the backfill button should invite another press.
+ *
+ * The distinction is money. `providerWall` means the feed has no more history
+ * and pressing again buys nothing; `pageLimit` and `deadline` mean the run
+ * stopped *itself* and the next press resumes from the bars already written.
+ * Collapsing them either hides real missing history or sells the same wall
+ * over and over.
+ */
+
+function frame(stopped: BackfillFrame["stopped"]): BackfillFrame {
+  return { timeframe: "15m", pages: 1, written: 10, stored: 10, stopped };
+}
+
+test("a run that stopped itself invites another press", () => {
+  assert.equal(backfillIncomplete([frame("pageLimit")]), true);
+  assert.equal(backfillIncomplete([frame("deadline")]), true);
+  assert.equal(
+    backfillIncomplete([frame("target"), frame("target"), frame("target"), frame("deadline")]),
+    true,
+    "one unfinished frame among three finished ones is still unfinished",
+  );
+});
+
+test("the end of the feed's history is not sold as a retry", () => {
+  // Pressing again against a provider wall spends credits to re-learn the
+  // same limit. On gold that is real money for no bars.
+  assert.equal(backfillIncomplete([frame("providerWall")]), false);
+  assert.equal(backfillIncomplete([frame("target"), frame("providerWall")]), false);
+});
+
+test("a finished run offers nothing more to do", () => {
+  assert.equal(backfillIncomplete([frame("target")]), false);
+  assert.equal(backfillIncomplete([]), false);
+});
+
+test("a failed frame is not quietly turned into a retry prompt", () => {
+  // `error` carries a reason the user should read. Folding it into "press
+  // again" would hide a misconfigured provider behind a button that keeps
+  // appearing to almost work.
+  assert.equal(backfillIncomplete([frame("error")]), false);
 });

@@ -1,0 +1,122 @@
+[
+  {
+    "name": "the walk never moves its cursor",
+    "expect": "months of history are assembled from pages no single call could return",
+    "edit": [
+      "    cursor = oldest;",
+      "    cursor = cursor ?? oldest;"
+    ]
+  },
+  {
+    "name": "pages are collected in a list, so the overlap bar lands twice",
+    "expect": "the bar where two pages meet is stored once, not twice",
+    "edit": [
+      "      byTime.set(candle.time, candle);",
+      "      byTime.set(candle.time + (byTime.has(candle.time) ? 1 : 0), candle);"
+    ]
+  },
+  {
+    "name": "an exhausted feed is asked forever",
+    "expect": "a feed that has run out ends the walk instead of being asked forever",
+    "edit": [
+      "    if (oldest === null || byTime.size === before || (cursor !== undefined && oldest >= cursor)) {",
+      "    if (false) {"
+    ]
+  },
+  {
+    "name": "a window-blind feed is looped on",
+    "expect": "a feed that has run out ends the walk instead of being asked forever",
+    "edit": [
+      "    if (oldest === null || byTime.size === before || (cursor !== undefined && oldest >= cursor)) {",
+      "    if (oldest === null) {"
+    ]
+  },
+  {
+    "name": "the cursor guard is dropped, so a live window-blind feed crawls forwards",
+    "expect": "a window-blind feed on a live market cannot walk the cursor forwards",
+    "edit": [
+      "    if (oldest === null || byTime.size === before || (cursor !== undefined && oldest >= cursor)) {",
+      "    if (oldest === null || byTime.size === before) {"
+    ]
+  },
+  {
+    "name": "a failed page throws away everything bought before it",
+    "expect": "pages already paid for survive a failure on a later one",
+    "edit": [
+      "      stopped = \"error\";\n      reason = error instanceof Error ? error.message : \"fetch failed\";\n      break;",
+      "      throw error;"
+    ]
+  },
+  {
+    "name": "the page budget is ignored",
+    "expect": "the page budget caps the spend even when the feed would keep going",
+    "edit": [
+      "  while (pages < maxPages) {",
+      "  while (true) {"
+    ]
+  },
+  {
+    "name": "pages ask for more than the provider returns, wasting the call",
+    "expect": "pages already paid for survive a failure on a later one",
+    "edit": [
+      "      page = await fetchPage({ limit: Math.min(want, pageSize), endTime: cursor });",
+      "      page = await fetchPage({ limit: want, endTime: cursor });"
+    ]
+  },
+  {
+    "name": "the first page is windowed to now instead of asking for the head",
+    "expect": "the first page asks for the newest bars, not a window",
+    "edit": [
+      "  let cursor: number | undefined = options.startAt;",
+      "  let cursor: number | undefined = options.startAt ?? Math.floor(Date.now() / 1000);"
+    ]
+  },
+  {
+    "name": "depth is discounted for a weekend the feed does not take",
+    "expect": "depth is sized by the calendar, not by a guess at the market's week",
+    "edit": [
+      "  return Math.ceil((86400 / TIMEFRAME_SECONDS[timeframe]) * days);",
+      "  return Math.ceil((86400 / TIMEFRAME_SECONDS[timeframe]) * days * (5 / 7));"
+    ]
+  },
+  {
+    "name": "a cold archive is planned as a tail walk with nothing to walk back from",
+    "expect": "an empty archive asks for everything and a warm one asks for the gap",
+    "edit": [
+      "    return { head: targetBars, tail: 0, tailFrom: null };",
+      "    return { head: 0, tail: targetBars, tailFrom: null };"
+    ]
+  },
+  {
+    "name": "the still-open newest bar is never re-read",
+    "expect": "an empty archive asks for everything and a warm one asks for the gap",
+    "edit": [
+      "  const head = missed > 0 ? missed + 1 : 0;",
+      "  const head = missed;"
+    ]
+  },
+  {
+    "name": "head and tail are collapsed into one newest-first walk",
+    "expect": "a half-filled archive deepens from its oldest bar instead of sticking",
+    "edit": [
+      "  return { head, tail, tailFrom: tail > 0 ? storedOldest : null };",
+      "  return { head: head + Math.max(0, targetBars - (storedBars + missed)), tail: 0, tailFrom: null };"
+    ]
+  },
+  {
+    "name": "the tail walk starts at the feed's head rather than the stored edge",
+    "expect": "a half-filled archive deepens from its oldest bar instead of sticking",
+    "edit": [
+      "  return { head, tail, tailFrom: tail > 0 ? storedOldest : null };",
+      "  return { head, tail, tailFrom: null };"
+    ]
+  },
+  {
+    "name": "the tail is measured against what is stored now, re-buying the overlap",
+    "expect": "a press that catches up and deepens at once does not buy the overlap twice",
+    "edit": [
+      "  const tail = Math.max(0, targetBars - (storedBars + missed));",
+      "  const tail = Math.max(0, targetBars - storedBars);"
+    ]
+  }
+]

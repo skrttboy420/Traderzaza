@@ -23,6 +23,8 @@ export class BinanceMarketDataProvider implements MarketDataProvider {
   readonly quality = "LIVE" as const;
   /** Keyless public endpoint; the weight limits sit far above this app's use. */
   readonly metered = false;
+  /** Binance caps `limit` at 1000; the request builder below clamps to it. */
+  readonly maxBarsPerCall = 1000;
   private readonly baseUrl: string;
 
   constructor(baseUrl = "https://api.binance.com") {

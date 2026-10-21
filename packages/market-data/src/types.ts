@@ -48,6 +48,16 @@ export interface MarketDataProvider {
    * provider cannot be added without someone answering the question.
    */
   readonly metered: boolean;
+  /**
+   * Most candles one call can return. Required for the same reason `metered`
+   * is: the history backfill pages backwards until the feed stops yielding
+   * older bars, and asking for more than this per page does not fail — the
+   * surplus is silently dropped while the call costs exactly the same. On the
+   * metered feed that is a credit bought and thrown away, repeatedly. Making
+   * it mandatory means the number is measured against each API rather than
+   * guessed once and inherited by every provider added afterwards.
+   */
+  readonly maxBarsPerCall: number;
   supports(symbol: string): boolean;
   fetchCandles(request: CandleRequest): Promise<CandleResponse>;
   /** Optional live stream. Providers without one return null and the UI polls. */

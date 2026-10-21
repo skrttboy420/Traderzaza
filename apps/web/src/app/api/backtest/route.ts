@@ -1,11 +1,20 @@
 import { NextResponse } from "next/server";
 import { backtest } from "@atc/engine";
-import { requireAsset } from "@atc/market-data";
+import { barsForDays, requireAsset } from "@atc/market-data";
 import type { Candle, Timeframe } from "@atc/types";
 
+import { archiveConfigured, archiveCoverage, readCandles } from "@/lib/candle-archive";
 import { serverEnv } from "@/lib/env";
 import { marketService, scanTimeframes } from "@/lib/scan";
-import { modeStates, parseBacktestRequest, type BacktestResponse } from "@/lib/backtest";
+import {
+  BACKTEST_DEPTH_DAYS,
+  backtestStride,
+  modeStates,
+  parseBacktestRequest,
+  type BacktestCoverage,
+  type BacktestResponse,
+  type BacktestSource,
+} from "@/lib/backtest";
 
 export const dynamic = "force-dynamic";
 
@@ -17,17 +26,34 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 /**
- * Bars between analyses.
+ * Read one timeframe's deep history, or report that there is none.
  *
- * Measured rather than guessed, and the measurement is the justification: on
- * four days of gold, stride 1 settles 17 trades in 7.5s and stride 2 settles
- * 15 in 3.5s. Halving the work costs two trades because the sample is not
- * bounded by how often the engine speaks — it speaks on 213 of 279 bars — but
- * by the one-position-at-a-time rule and the once-per-zone rule, which
- * collapse long runs of adjacent signals into a single trade regardless. A
- * stride of 1 mostly buys duplicate readings of zones already being traded.
+ * Returns null rather than an empty array so the caller can tell "the archive
+ * has nothing for this series" from "the archive has this series and it is
+ * empty" — the first falls back to the live window, the second would silently
+ * backtest on no bars and report a quiet market.
  */
-const STRIDE = 2;
+async function archiveSeries(
+  symbol: string,
+  timeframe: Timeframe,
+  limit: number,
+): Promise<Candle[] | null> {
+  const stored = await readCandles({ symbol, timeframe, limit });
+  return stored.length > 0 ? stored : null;
+}
+
+/** What is stored for the entry series, in the shape the panel renders. */
+async function coverageFor(symbol: string, timeframe: Timeframe): Promise<BacktestCoverage> {
+  const configured = archiveConfigured();
+  if (!configured) return { bars: 0, days: 0, configured: false };
+
+  const stored = await archiveCoverage({ symbol, timeframe });
+  const days =
+    stored.newest !== null && stored.oldest !== null
+      ? Math.round((stored.newest - stored.oldest) / 86400)
+      : 0;
+  return { bars: stored.bars, days, configured: true };
+}
 
 /**
  * GET /api/backtest?symbol=XAUUSD&timeframe=15m
@@ -46,19 +72,20 @@ const STRIDE = 2;
  * a frozen UI on a phone; here it is one request that resolves in a couple of
  * seconds and can be cancelled by navigating away.
  *
- * It asks for exactly the series the scan asks for: the same symbol, the same
- * chain, and `candleLimit` rather than a limit of its own. The cache keys on
- * `{symbol, timeframe, limit}`, so requesting more history would miss on every
- * key and refetch gold's four bars at full price on every press — and worse,
- * would keep a second set of entries warm alongside the scan's, doubling the
- * standing cost of the market. Pinning the limit means a backtest is free
- * while the page's own candles are warm and never dearer than one refresh of
- * the same market when they are not. `credits` below reports which of those
- * two actually happened rather than asserting the cheerful one.
+ * It prefers stored history and falls back to the live window. The archive is
+ * read for free and is as deep as the last backfill made it; the live path
+ * asks the scan's own `{symbol, timeframe, candleLimit}` cache keys, so it is
+ * free while the page's candles are warm and never dearer than one refresh of
+ * the same market when they are not. Requesting a *different* limit from the
+ * live feed would miss on every key and keep a second set of entries warm
+ * alongside the scan's, doubling the standing cost of the market — which is
+ * why deep history lives in the database rather than in a bigger fetch.
  *
- * The price of that choice is paid in history: roughly four days of 15-minute
- * bars, which is usually too thin for a per-grade verdict. The report says so
- * rather than inventing one.
+ * The fallback is reported, never inferred. Four days of bars almost always
+ * settles too few trades for a per-grade verdict, and `thin` from a shallow
+ * run means "ask again when there is more history", while `thin` from a
+ * four-month run means something much worse about the strategy. `source` is
+ * what lets the panel tell those apart.
  */
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -85,30 +112,64 @@ export async function GET(request: Request) {
 
   try {
     const started = Date.now();
-    const mtf = await service.getMtf(asset.symbol, scanTimeframes({ entryTimeframe: timeframe }), limit);
+    const chain = scanTimeframes({ entryTimeframe: timeframe });
+
+    // The live call happens either way: it is what reports data quality and
+    // provider for the series head, and on a warm cache it is free. The
+    // archive only replaces the *bars*.
+    const mtf = await service.getMtf(asset.symbol, chain, limit);
+
+    const stored = await Promise.all(
+      chain.map(async (tf) => ({
+        tf,
+        series: await archiveSeries(
+          asset.symbol,
+          tf,
+          barsForDays(tf, BACKTEST_DEPTH_DAYS),
+        ),
+      })),
+    );
+
+    // All or nothing per run, not per timeframe. A deep entry series mixed
+    // with a 400-bar 4H series is the worst of both: the walk starts months
+    // back, but every step before the 4H window opens analyses a chart with
+    // no higher-timeframe context at all, and silently grades a different
+    // engine from the one on screen.
+    const complete = stored.every((entry) => entry.series !== null);
+    const source: BacktestSource = complete ? "archive" : "live";
+
+    const candles: Partial<Record<Timeframe, Candle[]>> = { ...mtf.candles };
+    if (complete) {
+      for (const { tf, series } of stored) if (series) candles[tf] = series;
+    }
+
+    const entryBars = candles[timeframe]?.length ?? 0;
+    const stride = backtestStride(entryBars);
 
     const report = backtest({
       asset,
-      candles: mtf.candles,
+      candles,
       entryTimeframe: timeframe,
       dataStatus: mtf.status,
-      options: { states: modeStates(mode), stride: STRIDE },
+      options: { states: modeStates(mode), stride },
     });
 
     const ranMs = Date.now() - started;
     const after = service.creditSnapshot();
 
     const bars: Partial<Record<Timeframe, number>> = {};
-    for (const [tf, series] of Object.entries(mtf.candles) as [Timeframe, Candle[] | undefined][]) {
+    for (const [tf, series] of Object.entries(candles) as [Timeframe, Candle[] | undefined][]) {
       if (series) bars[tf] = series.length;
     }
 
     const payload: BacktestResponse = {
       request: parsed.request,
       report,
-      stride: STRIDE,
+      stride,
       bars,
       status: mtf.status,
+      source,
+      coverage: await coverageFor(asset.symbol, timeframe),
       credits: before && after ? Math.max(0, after.dayUsed - before.dayUsed) : null,
       ranMs,
     };

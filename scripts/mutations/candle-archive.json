@@ -1,0 +1,72 @@
+[
+  {
+    "name": "reads stop at the first response page (the silent 1000-row cap)",
+    "expect": "a read deeper than one response page",
+    "edit": ["for (let from = 0; from < params.limit; from += READ_PAGE) {", "for (let from = 0; from < Math.min(params.limit, 1); from += READ_PAGE) {"]
+  },
+  {
+    "name": "every page asks for the same window",
+    "expect": "every page asks for a window the one before it did not",
+    "edit": [".range(from, to);", ".range(0, to - from);"]
+  },
+  {
+    "name": "the last page is rounded up to a full one",
+    "expect": "the last page is sized to what was asked for",
+    "edit": ["const to = Math.min(from + READ_PAGE, params.limit) - 1;", "const to = from + READ_PAGE - 1;"]
+  },
+  {
+    "name": "a short page does not end the walk",
+    "expect": "an archive shallower than the request ends the walk",
+    "edit": ["if (rows.length < to - from + 1) break;", ""]
+  },
+  {
+    "name": "bars are left newest-first",
+    "expect": "bars come back oldest first",
+    "edit": ["  return collected.reverse();\n}\n\nexport interface WriteResult", "  return collected;\n}\n\nexport interface WriteResult"]
+  },
+  {
+    "name": "reads take the oldest bars instead of the newest",
+    "expect": "the newest bars are the ones returned",
+    "edit": [".order(\"open_time\", { ascending: false })\n        .range(from, to);", ".order(\"open_time\", { ascending: true })\n        .range(from, to);"]
+  },
+  {
+    "name": "a thrown read is not caught",
+    "expect": "an unreachable database reads as an empty archive",
+    "edit": ["  } catch {\n    return collected.reverse();\n  }", "  } finally {\n    void 0;\n  }"]
+  },
+  {
+    "name": "a failed read discards the pages already collected",
+    "expect": "pages already read survive a failure on a later one",
+    "edit": ["  } catch {\n    return collected.reverse();\n  }", "  } catch {\n    return [];\n  }"]
+  },
+  {
+    "name": "a failed write reports nothing stored",
+    "expect": "bars already committed survive a failure on a later chunk",
+    "edit": ["      if (error) return { written, ok: false };", "      if (error) return { written: 0, ok: false };"]
+  },
+  {
+    "name": "the whole write is sent as one statement",
+    "expect": "a write larger than one statement is split",
+    "edit": ["for (let i = 0; i < rows.length; i += WRITE_CHUNK) {\n      const chunk = rows.slice(i, i + WRITE_CHUNK);", "for (let i = 0; i < rows.length; i += rows.length) {\n      const chunk = rows.slice(i, i + rows.length);"]
+  },
+  {
+    "name": "synthetic bars are allowed into the archive",
+    "expect": "synthetic bars are refused",
+    "edit": ["if (params.quality === \"DEMO\") return { written: 0, ok: false };", ""]
+  },
+  {
+    "name": "coverage pulls the rows it is counting",
+    "expect": "coverage counts the archive without reading it",
+    "edit": ["base.order(\"open_time\", { ascending: false }).limit(1),", "base.order(\"open_time\", { ascending: false }).limit(100000),"]
+  },
+  {
+    "name": "coverage forgets to filter by timeframe",
+    "expect": "coverage is asked for one series, not for the whole table",
+    "edit": ["      .select(\"open_time\", { count: \"exact\" })\n      .eq(\"symbol\", params.symbol)\n      .eq(\"timeframe\", params.timeframe);", "      .select(\"open_time\", { count: \"exact\" })\n      .eq(\"symbol\", params.symbol);"]
+  },
+  {
+    "name": "a read forgets to filter by timeframe",
+    "expect": "a read is asked for one series, not for the whole table",
+    "edit": ["        .eq(\"symbol\", params.symbol)\n        .eq(\"timeframe\", params.timeframe)\n        .order(\"open_time\", { ascending: false })", "        .eq(\"symbol\", params.symbol)\n        .order(\"open_time\", { ascending: false })"]
+  }
+]

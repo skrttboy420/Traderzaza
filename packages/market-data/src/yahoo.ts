@@ -108,6 +108,13 @@ export class YahooFinanceProvider implements MarketDataProvider {
   readonly quality = "LIVE" as const;
   /** Keyless and unlimited as far as this app is concerned. */
   readonly metered = false;
+  /**
+   * The row trim below. Note this is the *response* ceiling, not the history
+   * ceiling: `MAX_LOOKBACK_SECONDS` is the one that bites, and a 15m window
+   * older than 60 days comes back a 422 however few bars it asks for. The
+   * backfill discovers that by being refused rather than by reading it here.
+   */
+  readonly maxBarsPerCall = 2000;
   private readonly baseUrl: string;
 
   constructor(baseUrl = "https://query1.finance.yahoo.com") {

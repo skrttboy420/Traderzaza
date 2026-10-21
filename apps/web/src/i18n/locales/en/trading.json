@@ -309,7 +309,7 @@
   },
   "backtest": {
     "title": "Does the grade mean anything?",
-    "subtitle": "Replays the engine bar by bar over the history already loaded, settles its own signals against what price then did, and reports average R per grade.",
+    "subtitle": "Replays the engine bar by bar over stored history, settles its own signals against what price then did, and reports average R per grade.",
     "market": "Market",
     "timeframe": "Entry timeframe",
     "mode": "Signals",
@@ -336,7 +336,7 @@
     "verdictHint": {
       "holds": "Average R falls as the grade falls, which is exactly what the letter claims. Both grades compared cleared the minimum sample.",
       "inverted": "A lower grade out-earned a higher one over this sample. If that survives a longer run, the scoring weights need rethinking rather than defending.",
-      "thin": "Fewer than two grades reached twenty settled trades, and below twenty a single outlier still flips the average's sign. The rows below are real results, but they are not yet evidence either way. The window is capped at the candles the scan already asks for — which is what stops a backtest costing more than a refresh of the same market, and what keeps it short.",
+      "thin": "Fewer than two grades reached twenty settled trades, and below twenty a single outlier still flips the average's sign. The rows below are real results, but they are not yet evidence either way.",
       "noSignals": "No setup reached the selected state over this window, so nothing was settled and there is nothing to grade. Try the wider signal set.",
       "noRun": "The series was too short to analyse a single bar. Open this market on a scanning screen once so the candles are loaded."
     },
@@ -367,7 +367,33 @@
       "noForwardCandles": "No candles left to settle against"
     },
     "skippedHint": "Most signals never become trades, and that is the risk rules working: one position at a time, one trade per zone. It also means the engine speaks far more often than it acts.",
-    "footer": "{{bars}} bars · ran in {{seconds}}s · {{credits}} credits spent",
-    "caveat": "No spread, no commission, no slippage and no partial fills, so these R figures are an upper bound on what the same decisions would have earned in a real account. The ordering between grades is the part worth trusting; the absolute numbers are not."
+    "footer": "{{bars}} bars · every {{stride}} bars · ran in {{seconds}}s · {{credits}} credits spent",
+    "caveat": "No spread, no commission, no slippage and no partial fills, so these R figures are an upper bound on what the same decisions would have earned in a real account. The ordering between grades is the part worth trusting; the absolute numbers are not.",
+    "thinBecause": {
+      "live": "This run used the live {{days}}-day window, which is all the feed hands over in one call. Store deeper history below and the same question becomes answerable.",
+      "archive": "This run already had {{days}} days of stored history, so the sample is what the strategy actually produced over four months rather than a shortage of data. A strategy that trades this rarely per grade is hard to grade at all."
+    },
+    "strideCaveat": "Analysed every {{stride}} bars to finish inside the time limit. Entry-now is momentary by design, so a step this wide walks over most of the moments it existed — read a low count here as thin sampling, not as a quiet market.",
+    "depth": {
+      "title": "Stored history",
+      "stored": "{{days}} days · {{bars}} bars",
+      "none": "Not stored",
+      "unconfigured": "This deployment has no database, so every run uses the live window of a few hundred bars. That is enough to prove the engine runs and never enough to grade it.",
+      "liveHint": "This run used the live window, not stored history. Load {{days}} days once and every run afterwards reads it back for free.",
+      "archiveHint": "This run read stored history. Press again only to catch up to now — the bars already held are never re-bought.",
+      "fill": "Load {{days}} days of history",
+      "filling": "Loading history...",
+      "fillingHint": "Paging four timeframes. On gold the feed allows 8 calls a minute, so this waits as much as it works.",
+      "stopped": {
+        "target": "{{bars}} bars · full",
+        "providerWall": "{{bars}} bars · feed has no more",
+        "pageLimit": "{{bars}} bars · stopped at the spend limit",
+        "deadline": "{{bars}} bars · ran out of time",
+        "error": "{{bars}} bars · failed"
+      },
+      "fillFooter": "Ran in {{seconds}}s · {{credits}} credits spent.",
+      "pressAgain": "Press again to continue from here.",
+      "stale": "History was deepened after this result was produced. Run again to grade against it."
+    }
   }
 }

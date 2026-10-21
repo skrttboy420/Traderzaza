@@ -3,6 +3,7 @@ import { BinanceMarketDataProvider } from "./binance";
 import { MockMarketDataProvider } from "./mock";
 import { TwelveDataProvider } from "./twelvedata";
 import type { CreditSnapshot } from "./twelvedata";
+import { backfillCandles, type BackfillOptions, type BackfillResult } from "./history";
 import type { CandleRequest, CandleResponse, MarketDataProvider } from "./types";
 import { TIMEFRAME_SECONDS } from "./types";
 import { YahooFinanceProvider } from "./yahoo";
@@ -261,6 +262,52 @@ export class MarketDataService {
       result.status.note = `Live feed unavailable (${reason}). Showing DEMO data instead.`;
       return result;
     }
+  }
+
+  /**
+   * Walks one series backwards until it has `targetBars` or the feed runs out.
+   *
+   * Deliberately *not* routed through `getCandles`. Two reasons, both about
+   * not poisoning the thing that keeps the free tier alive. The TTL cache is
+   * keyed on `{symbol, timeframe, limit, window}`, so every page of a backfill
+   * is a distinct key that the live app will never ask for again — a few
+   * thousand bars per entry, held for nothing. And the demo fallback is wrong
+   * here: a scan that degrades to synthetic candles still draws a usable
+   * chart, but synthetic candles written into a history archive become
+   * permanent fake prices that later runs cannot tell from real ones. A
+   * failed page ends the walk and keeps what was already real.
+   *
+   * The caller owns persistence. This only knows how to ask.
+   */
+  async backfill(params: {
+    symbol: string;
+    timeframe: Timeframe;
+    targetBars: number;
+    maxPages?: number;
+    /**
+     * Start the walk here instead of at the feed's newest bar. This is how a
+     * stored archive is *deepened* rather than re-bought: page back from the
+     * oldest bar already held.
+     */
+    startAt?: number;
+  }): Promise<BackfillResult> {
+    const provider = this.providerFor(params.symbol);
+    const options: BackfillOptions = {
+      timeframe: params.timeframe,
+      targetBars: params.targetBars,
+      pageSize: provider.maxBarsPerCall,
+      fetchPage: ({ limit, endTime }) => {
+        const request: CandleRequest = { symbol: params.symbol, timeframe: params.timeframe, limit };
+        // Only set when we are actually windowing. An undefined endTime on the
+        // first page is what asks for "the newest bars", and providers size
+        // their own lookback differently for a windowed request.
+        if (endTime !== undefined) request.endTime = endTime;
+        return provider.fetchCandles(request);
+      },
+    };
+    if (params.maxPages !== undefined) options.maxPages = params.maxPages;
+    if (params.startAt !== undefined) options.startAt = params.startAt;
+    return backfillCandles(options);
   }
 
   /** Loads the whole MTF chain in parallel and reports the weakest data quality. */

@@ -135,6 +135,8 @@ export class MockMarketDataProvider implements MarketDataProvider {
   readonly quality = "DEMO" as const;
   /** Generated in process; there is nothing to spend. */
   readonly metered = false;
+  /** Generated to order, so this is a sanity bound rather than an API limit. */
+  readonly maxBarsPerCall = 5000;
   private readonly options: MockOptions;
 
   constructor(options: MockOptions = {}) {
